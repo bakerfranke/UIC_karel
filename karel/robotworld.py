@@ -1,4 +1,4 @@
-""" Copyright 2008 Joseph Bergin
+""" Copyright 2008 Joseph Bergin -- Update 2025 Baker Franke
 License: Creative Commons Attribution-Noncommercial-Share Alike 3.0 United States License
 
 Represents the robot world. It maintains knowledge about walls and beepers in the world. It also knows 
@@ -25,15 +25,13 @@ from karel.observable import Observer
 #from exceptions import NotImplementedError
 
 infinity = -1
-#INFINITE = infinity # Deprecated, use infinity
-
-class Runner:
-    def run(self, task, *pargs):
-       mainThread = threading.Thread(target = task, args=pargs)
-       mainThread.start()
+_window = None
 
 def window(streets = 10, avenues = 10):
-    return Runner()
+    global _window
+    if _window == None:
+        _window = world
+    return _window
 
 from karel.robotworldbase import RobotWorldBase
 
@@ -58,7 +56,11 @@ class RobotWorld(RobotWorldBase, Observer) :
         self.__delay = 0
         self._isVisible = False
         print("Creating ", name)
-        
+    
+    def run(self, task, *pargs):
+       mainThread = threading.Thread(target = task, args=pargs)
+       mainThread.start()
+
     def update(self, robot, robotState = None):
         "This is called whenever any robot changes state since the world observes all robots"
         if robotState == None :
@@ -66,7 +68,14 @@ class RobotWorld(RobotWorldBase, Observer) :
         action = robotState.action()
         if action == karel.robota.UrRobot.moveAction or action == karel.robota.UrRobot.createAction :
             self._registerRobot(robot)
-            
+
+        from karel.robota import UrRobot #defer this import to here to prevent circular import, we need the actions dictionary
+        print(
+            f"UPDATE: Robot {robot.ID()} at ({robotState.street()}, {robotState.avenue()}) facing {robotState.direction().__name__} "
+            f"with {robotState.beepers()} beeper(s), action: {UrRobot.actions[robotState.action()]}, {robotState.isRunning()}"
+        )
+
+
     def name(self):
         "Return the name of this world"
         return self._name
@@ -89,28 +98,23 @@ class RobotWorld(RobotWorldBase, Observer) :
     
 #    _runnables = []
     
-#        
-    def placeBeepers(self, street, avenue, howMany=1, byUser = True):
+    def placeBeepers(self, street, avenue, howMany=1, byUser=True):
         """
         Place any number of beepers at a corner. Use RobotWorld.infinity to place an infinite number.
         The number will be added to the number currently there. Don't try to reduce the number
-        by giving a negative value. Strange behavior can result since negative values are treated as infinite. 
+        by giving a negative value. Strange behavior can result since negative values are treated as infinite.
         """
-        if howMany == 0 :
+        if howMany == 0:
             return
-        if karel.robota.graphics>0:
-            karel.tkworldadapter.window().placeBeepers(street, avenue, howMany) #xxx TODO avoid
         legalCorner(street, avenue)
         place = (street, avenue)
-        if howMany < 0 :
+        if howMany < 0:
             self._beepers[place] = infinity
-#            if karel.robota.graphics>0:karel.robota.window.placeBeeper(street, avenue, howMany) #xxx TODO avoid
             return
         inWorld = self._beepers.get(place, 0)
-        if inWorld != infinity :
+        if inWorld != infinity:
             self._beepers[place] = howMany + inWorld
-#            if karel.robota.graphics>0:karel.robota.window.placeBeeper(street, avenue, howMany) #xxx TODO avoid
-        
+       
     def placeWallNorthOf(self, street, avenue):
         "Place an east-west wall segment north of this corner"
         legalCorner(street, avenue)
@@ -160,7 +164,7 @@ class RobotWorld(RobotWorldBase, Observer) :
     def showSpeedControl(self, visible = True):
         pass #TODO: add this
  
-world = RobotWorld("Karel's World")   
+world = RobotWorld("Karel's Robot World")   
 
 if __name__ =='__main__':
 
