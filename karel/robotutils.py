@@ -118,20 +118,20 @@ def get_beeper_diffs(world_beepers, expected_beepers):
     for position in sorted(all_positions):
         robot_count = world_beepers.get(position, None)
         expected_count = expected_beepers.get(position, None)
-
-        if robot_count is None:  # Missing in robot world
+        
+        if robot_count is None and expected_count > 0:  # Missing in robot world
             differences_found = True
             comparison_lines.append(
                 f"{'MISSING'.ljust(8)}| {'_   _   _':<14}| "
                 f"{f'{position[0]:<3} {position[1]:<3} {expected_count:<5}':<14}"
             )
-        elif expected_count is None:  # Extra in robot world
+        elif expected_count is None and robot_count > 0:  # Extra in robot world
             differences_found = True
             comparison_lines.append(
                 f"{'EXTRA'.ljust(8)}| "
                 f"{f'{position[0]:<3} {position[1]:<3} {robot_count:<5}':<14}| {'--  --  --':<14}"
             )
-        elif robot_count != expected_count:  # Mismatched counts
+        elif robot_count != None and expected_count != None and robot_count != expected_count:  # Mismatched counts
             differences_found = True
             robot_count = str(robot_count)+"<<"
             comparison_lines.append(
@@ -139,7 +139,7 @@ def get_beeper_diffs(world_beepers, expected_beepers):
                 f"{f'{position[0]:<3} {position[1]:<3} {robot_count:<5}':<14}| "
                 f"{f'{position[0]:<3} {position[1]:<3} {expected_count:<5}':<14}"
             )
-        else:  # Matches correctly
+        elif robot_count != None and expected_count != None:  # Matches correctly
             comparison_lines.append(
                 f"{'   -'.ljust(8)}| "
                 f"{f'{position[0]:<3} {position[1]:<3} {robot_count:<5}':<14}| "
