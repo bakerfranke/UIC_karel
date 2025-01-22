@@ -108,7 +108,7 @@ class UrRobot(_RobotSkeleton, Observable):
         5: "New Robot Created"
     }
     
-    def __init__(self, street, avenue, direction, beepers, fill = 'blue', outline = 'black'):
+    def __init__(self, street, avenue, direction, beepers, fill = 'yellow', outline = 'black'):
         "Create a robot in a particular situation."
         
         if not UrRobot._graphics_initialized:
@@ -353,7 +353,7 @@ from karel.sensorpack import _SensorPack
 class Robot(UrRobot, _SensorPack) :
     "Adds sensing facilities to robots, but otherwise these behave just like UrRobots."
     
-    def __init__(self, street, avenue, direction, beepers, fill = 'blue', outline = 'black'):
+    def __init__(self, street, avenue, direction, beepers, fill = 'yellow', outline = 'black'):
         UrRobot.__init__(self, street, avenue, direction, beepers, fill, outline )
         
     def anyBeepersInBeeperBag(self):
