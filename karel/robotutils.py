@@ -1,5 +1,6 @@
 """
 Useful functions and constants for getting info from robots esp. for writing tests.
+These methods are used by kareltestutils.py
 """
 from karel.robota import East, West, North, South, UrRobot, Robot
 from karel.robotworld import RobotWorld
@@ -100,10 +101,10 @@ def get_world_diffs(robot_world, expected_world):
 
 def get_world_diffs_from_file(robot_world, expected_world_file):
     """
-    Compares the current world state with the state described in a .kwld file.
+    Compares the a given world state with the state described in a .kwld file.
 
     Args:
-        current_world: The current RobotWorld object.
+        robot_world: The give RobotWorld object to test.
         expected_world_file (str): Path to the .kwld file describing the expected state.
 
     Returns:
@@ -179,39 +180,3 @@ def get_beeper_diffs(world_beepers, expected_beepers):
         'diffs': differences_found,
         'allbeeperdiffs': "\n".join(comparison_lines)
     }
-
-
-
-def get_beeper_diffs_OLD(world_beepers, expected_beepers):
-    """
-    Compares beepers in the current world state with those described in another world.
-
-    Args:
-        world_beepers (dict): Beeper positions and counts in the current world state.
-        expected_beepers (dict): Beeper positions and counts from the .kwld file or another world.
-
-    Returns:
-        dict: Differences categorized as 'missing', 'extra', and 'mismatched'.
-    """
-    differences = {
-        'missing': {},  # Beepers in the file but not in the current world
-        'extra': {},    # Beepers in the current world but not in the file
-        'mismatched': {}  # Locations where counts differ
-    }
-
-    # Compare file beepers with world beepers
-    for location, count in expected_beepers.items():
-        if location not in world_beepers:
-            differences['missing'][location] = count
-        elif world_beepers[location] != count:
-            differences['mismatched'][location] = {
-                'your_world': world_beepers[location],
-                'expected': count
-            }
-
-    # Find extra beepers in the current world
-    for location, count in world_beepers.items():
-        if location not in expected_beepers:
-            differences['extra'][location] = count
-
-    return differences
