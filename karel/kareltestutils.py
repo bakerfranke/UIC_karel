@@ -1,20 +1,17 @@
 # generic value v. expected test
-from karel.robota import *
-import karel.robotutils as util
-
-def testEquals(test_name, test_desc, value, expected, verbose=True):
+def testEquals(test_name, test_desc, value, expected, showFailOnly=False):
     result = True
     if value != expected:
         result = False
     
     # default show fail tests, but also 
-    if result == False or verbose==True:
-        print(getTestResultStr(test_name, test_desc, value, expected, result))
+    if result == False or showFailOnly==False:
+        print(testResultStr(test_name, test_desc, value, expected, result))
     
     return result
 
 # use this to produce standard output string for a tests
-def getTestResultStr(test_name, test_desc, value, expected, result):
+def testResultStr(test_name, test_desc, value, expected, result):
     return  (
             f"{'-'*70}\n"
             f"TEST: {test_name}\n"
@@ -34,7 +31,7 @@ def testRobotEquals_ignoreBeeepers(test_name, robot_status_tuple, expected_statu
 
     result = street and ave and dir
     if result == False or verbose == True:
-        print(getTestResultStr(test_name, 
+        print(testResultStr(test_name, 
                             test_desc, 
                             status_tuple_str(robot_status_tuple), 
                             status_tuple_str(expected_status_tuple), 
@@ -60,7 +57,7 @@ def testRobotEquals(test_name, robot_status_tuple, expected_status_tuple, atLeas
     result = loc_dir_result and beeps_result
 
     if result == False or verbose == True:
-        print(getTestResultStr(test_name,
+        print(testResultStr(test_name,
                             test_desc, 
                             status_tuple_str(robot_status_tuple), 
                             status_tuple_str(expected_status_tuple), 
@@ -78,9 +75,9 @@ def status_tuple_str(tup):
     else:
         dirstr = "South"
 
-    return f"(st: {tup[0]:2d}, ave: {tup[1]:2d}, dir: {dirstr:>5s}, beeps: {tup[3]})"
+    return f"(st: {tup[0]:2d}, ave: {tup[1]:2d}, dir: {dirstr:5s}, beeps: {tup[3]})"
 
-def testClassMethodExists(classname, expectedMethod, verbose=True):
+def testClassMethodExists(classname, expectedMethod):
     #expectedMethod = "MileWalker.turnRight()"
     hasMethod = f"Not defined <{expectedMethod}()> "
 
@@ -90,7 +87,7 @@ def testClassMethodExists(classname, expectedMethod, verbose=True):
     result = testEquals(f"Method check",
                         f"Does {classname} defines method {expectedMethod}()?",
                         hasMethod,
-                        expectedMethod+"()",)
+                        expectedMethod+"()")
     return result
 
 def testWorldEquals(test_name, robot_world:RobotWorld, world_kwld_file:str):
