@@ -1,11 +1,7 @@
 """
 Useful functions and constants for getting info from robots esp. for writing tests.
 """
-from karel.robota import world
-from karel.robota import North
-from karel.robota import West
-from karel.robota import South
-from karel.robota import East
+from karel.robota import East, West, North, South, UrRobot, Robot
 from karel.robotworld import RobotWorld
 
 direction_strings = {
@@ -45,11 +41,44 @@ def getStatus(robot):
             robot._UrRobot__direction,
             robot._UrRobot__beepers)
 
-def checkRobotEquals(robot, robot_tuple):
-    return (robot._UrRobot__street == robot_tuple[0]
-            and robot._UrRobot__avenue == robot_tuple[1]
-            and robot._UrRobot__direction == robot_tuple[2]
-            and robot._UrRobot__beepers == robot_tuple[3])
+def robotEquals(robot_or_tuple_A, robot_or_tuple_B, ignoreBeepers=False, atLeastBeepers=False):
+    """
+    Compares the status of a robot or a status tuple to another status tuple.
+
+    :param robot_or_tuple_A: Either a robot object or a status tuple (street, avenue, direction, beepers).
+    :param robot_or_tuple_B: Either a robot object or a status tuple (street, avenue, direction, beepers) to compare against.
+    :param ignoreBeepers: defaults to False. If True, ignores the beeper count during the comparison.
+    :param atLeastBeepers: defaults to False. If True, returns true if robot_A has at least as many beepers as robot_B(ignoreBeepers overrides this)
+    :return: True if the statuses match (considering beepers if not ignored), otherwise False.
+    """
+    # Check if the first parameter is a robot, and convert to a status tuple if so
+    if isinstance(robot_or_tuple_A, UrRobot):
+        robot_A = getStatus(robot_or_tuple_A)  # Convert robot to a status tuple using utility function
+    else:
+        robot_A = robot_or_tuple_A  # Assume obj is already a tuple
+
+    if isinstance(robot_or_tuple_B, UrRobot):
+        robot_B = getStatus(robot_or_tuple_B)  # Convert robot to a status tuple using utility function
+    else:
+        robot_B= robot_or_tuple_B  # Assume obj is already a tuple
+    
+    # Perform the location and direction comparison
+    result = (robot_A[0] == robot_B[0] and  # Compare street
+              robot_A[1] == robot_B[1] and  # Compare avenue
+              robot_A[2] == robot_B[2])     # Compare direction
+
+
+    # Handle beeper comparison based on flags
+    if not ignoreBeepers:  # If beepers are not ignored
+        if atLeastBeepers:
+            # Check if robot_A has at least as many beepers as robot_B
+            result = result and (robot_A[3] >= robot_B[3])
+        else:
+            # Check if beeper counts are exactly equal
+            result = result and (robot_A[3] == robot_B[3])
+
+
+    return result
 
 def get_world_diffs(robot_world, expected_world):
     """
