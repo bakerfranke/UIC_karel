@@ -303,6 +303,15 @@ class RobotWorldBase:
     def getAllBeepers(self):
         return self._beepers
     
+    def getTotalBeeperCount(self):
+        allBeeps = self.getAllBeepers()
+        beeper_count = 0
+        for loc in allBeeps:
+            beeper_count += allBeeps[loc]
+        
+        return beeper_count
+
+    
     def getAllRobots(self):
         robot_list = []
         for robot in self._robots:
