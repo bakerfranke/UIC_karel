@@ -400,11 +400,11 @@ class Robot(UrRobot, _SensorPack) :
         return self.neighbors() != []
     
     def getStreet(self):
-        return self.__street
+        return self._UrRobot__street
     
     def getAvenue(self):
-        return self.__avenue
+        return self._UrRobot__avenue
     
     def getBeepers(self):
-        return self.__beepers
+        return self._UrRobot__beepers
     
