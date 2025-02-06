@@ -97,6 +97,7 @@ class UrRobot(_RobotSkeleton, Observable):
     putBeeperAction = 3
     turnOffAction = 4
     createAction = 5
+    setVisibleAction = 6
 
     # a simple dictionary to get the string for the int code
     actions = {
@@ -105,10 +106,11 @@ class UrRobot(_RobotSkeleton, Observable):
         2: "pickBeeper()",
         3: "putBeeper()",
         4: "turnOff()",
-        5: "New Robot Created"
+        5: "New Robot Created",
+        6: "Robot Visibility Changed"
     }
     
-    def __init__(self, street, avenue, direction, beepers, fill = 'yellow', outline = 'black'):
+    def __init__(self, street, avenue, direction, beepers, fill = 'yellow', outline = 'black', visible=True):
         "Create a robot in a particular situation."
         
         if not UrRobot._graphics_initialized:
@@ -120,6 +122,7 @@ class UrRobot(_RobotSkeleton, Observable):
         self.__street = street
         self.__avenue = avenue
         self.__direction = direction
+        self.__visible = visible
         
         if beepers < 0 :
             beepers = infinity
@@ -134,6 +137,7 @@ class UrRobot(_RobotSkeleton, Observable):
         self.notifyObservers(self.RobotState(self, self.createAction))
         self.__pausing = False
         self.__userPausing = False
+        
 
 
     @staticmethod
@@ -174,7 +178,9 @@ class UrRobot(_RobotSkeleton, Observable):
 
     def getID(self):
         print(self.__ID, str(self.__ID))
-        
+
+
+
     def display(self):
         "Print out the current situation of the robot."
         print ("Robot with ID: " + str(self.__ID))
@@ -214,7 +220,8 @@ class UrRobot(_RobotSkeleton, Observable):
         """Perform a robot action, notify observers, and update the window. Leave check if running to action methods"""
         self.setChanged()
         self.notifyObservers(self.RobotState(self, action))
-        self._update_if_graphics()
+        if self.__visible:
+            self._update_if_graphics()
         self.sleep()
               
     def move(self):
@@ -249,6 +256,10 @@ class UrRobot(_RobotSkeleton, Observable):
 
         self._perform_action(self.turnLeftAction)
 
+    def setVisible(self, tf:bool):
+        self.__pause(f'setVisible({tf})')
+        self.__visible = tf
+        self._perform_action(self.setVisibleAction)
 
     def pickBeeper(self):
         "Pick a beeper from the current corner or fail if there are none to pick."
@@ -387,4 +398,13 @@ class Robot(UrRobot, _SensorPack) :
     def nextToARobot(self):
         "Return true if there are any other robots on the current corner."
         return self.neighbors() != []
+    
+    def getStreet(self):
+        return self.__street
+    
+    def getAvenue(self):
+        return self.__avenue
+    
+    def getBeepers(self):
+        return self.__beepers
     
