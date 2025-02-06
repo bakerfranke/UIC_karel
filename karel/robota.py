@@ -399,6 +399,13 @@ class Robot(UrRobot, _SensorPack) :
         "Return true if there are any other robots on the current corner."
         return self.neighbors() != []
 
-
+    def getStreet(self):
+        return self._UrRobot__street
+    
+    def getAvenue(self):
+        return self._UrRobot__avenue
+    
+    def getBeepers(self):
+        return self._UrRobot__beepers
 
     
