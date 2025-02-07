@@ -54,7 +54,7 @@ class RobotWorld(RobotWorldBase, Observer) :
         self._robots = {}
         self.__gRobots = {}
         self.__delay = 80 # slow
-        self._isVisible = False
+        self._visible = True
         self.__beeperControl = threading.Condition()
         self._streets = streets
         self._avenues = avenues
@@ -105,6 +105,11 @@ class RobotWorld(RobotWorldBase, Observer) :
         elif action == karel.robota.UrRobot.turnOffAction :
             self.__gRobots[robot].greyOut();
         
+        # added by Baker
+        elif action == karel.robota.UrRobot.setVisibleAction :
+            if _window != None:
+                self.__gRobots[robot].setVisible(robot._UrRobot__visible);
+
         else :
             pass
         
