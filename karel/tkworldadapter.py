@@ -273,26 +273,6 @@ class RobotWorld(RobotWorldBase, Observer) :
         #from karel.tkworldadapter import initialize_graphics
         self.initialize_graphics()  # Ensure graphics are initialized
         super().readWorld(filename)  # Call the base class implementation
-
-        # BEF: inefficient way to read the street/avenues dimensions out of the file
-        # the super class (robotworldbase) is ignorant of the display dimensions of
-        # the world, so we intercept it here.
-        allLines = open(filename).readlines() # an array of strings termined by newliens
-        #print(allLines)
-        street_size = 10 #defaults -- should be defined globally
-        avenue_size = 10
-
-        for line in allLines: #open(filename).readlines() :
-            words = line.split(" ")
-            key = words[0]
-            if key == "streets":
-                street_size = int(words[1])
-            elif key == "avenues":
-                avenue_size = int(words[1])
-        
-        self.setSize(street_size, avenue_size)
-
-
         global _window
         if _window:
             _window.update()  # Trigger a refresh of the graphical window
