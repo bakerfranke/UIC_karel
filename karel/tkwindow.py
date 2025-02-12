@@ -39,7 +39,6 @@ class RobotImage:
         self._canvas = window._canvas
         self._street = street
         self._avenue = avenue
-        self._visible = True #always starts visible
         self.scaleFactor = window._KarelWindow__scaleFactor
         self._scaler = window._scaleToPixels
         self.__scaleFactor = window._KarelWindow__scaleFactor
@@ -198,9 +197,6 @@ class RobotImage:
         self._outline = "grey"
         self.show()
        
-    def setVisible(self, tf:bool):
-        self._visible = tf
-        self.show()
         
     def move(self, amount):
         ''' Moves a robot by an arbitrary amount in pixels, not streets, but in forward direction'''        
@@ -273,10 +269,6 @@ class RobotImage:
     def showKarel(self):
         ''' create the graphic object and make it visible'''
         self._canvas.delete(self.tag)
-        
-        if not self._visible:  #return if visiblity is off
-            return None
-        
         result = self._canvas.create_polygon( self.image[0], # head
                               outline = self._outline,
                               fill = "grey",
@@ -325,9 +317,7 @@ class RobotImage:
             result1 = self._canvas.create_rectangle(self.image[i], fill = "blue", width = 2, outline = self._outline, tags = self.tag) #left eye
         for i in range(8, 11) : # letter k (three lines)
             result1 = self._canvas.create_line(self.image[i], width = 2, fill = self._outline, tags = self.tag)
-        
-
-        return result #this does nothing?
+        return result
     
     def showAlien(self): # works for crabRobot also
         ''' create the graphic object and make it visible'''
