@@ -131,6 +131,9 @@ class RobotWorld(RobotWorldBase, Observer) :
         self.__delay = amount 
         if _window != None :
             _window.iv.set(100 - amount)
+
+    def setSpeed(self, amount):
+        self.setDelay(100-amount)
         
     def speedCallback(self,*args):
         global _window

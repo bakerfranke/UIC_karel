@@ -584,8 +584,8 @@ class KarelWindow(Frame):
             self.__walls.append(self._canvas.create_line(x, y, tx, ty, fill= "red"))
 
 
-    street_names = ["madison","chicago","north","fullerton","belmont","irving park","lawrence","bryn mawr","touhy"]
-    avenue_names = ["harlem","narraganset","central","cicero","pulaski","kedzie","western","ashland","halsted","state"]
+    #street_names = ["madison","chicago","north","fullerton","belmont","irving park","lawrence","bryn mawr","touhy"]
+    #avenue_names = ["harlem","narraganset","central","cicero","pulaski","kedzie","western","ashland","halsted","state"]
     def labelStreetsAvenues(self):
         for i in range(self.__streets):
             (x, y) = self._scaleToPixels(i + 1, .25)
@@ -593,13 +593,17 @@ class KarelWindow(Frame):
             bufferx = 0.33*self.__scaleFactor
 
             self.__walls.append(self._canvas.create_text(x,y, fill = 'black', text = str(i+1)))
-            if i < len(self.street_names):
-                s_name = self.street_names[i]
-            else:
-                s_name = f"street {i}"
+            
+            # Baker note: commenting out the labeling of streets with chicago names for now.  8.28.25.  Will get back to it later
+            # See RobotWorld.setDisplayMode() -- it is currently not linked to this code.  We'd need to refernce the world being used.
+            
+            # if i < len(self.street_names):
+            #     s_name = self.street_names[i]
+            # else:
+            #     s_name = f"street {i}"
 
 
-            self.__walls.append(self._canvas.create_text(x+bufferx, y-1, anchor='sw', fill = 'gray', text = s_name))
+            #self.__walls.append(self._canvas.create_text(x+bufferx, y-1, anchor='sw', fill = 'gray', text = s_name))
 
         
         for i in range(self.__avenues):
@@ -608,12 +612,12 @@ class KarelWindow(Frame):
             self.__walls.append(self._canvas.create_text(x,y, fill = 'black', text = str(i+1)))
 
             buffery = 0.33*self.__scaleFactor
-            if i < len(self.avenue_names):
-                a_name = self.avenue_names[i]
-            else:
-                a_name = f"avenue {i}"
+            # if i < len(self.avenue_names):
+            #     a_name = self.avenue_names[i]
+            # else:
+            #     a_name = f"avenue {i}"
 
-            self.__walls.append(self._canvas.create_text(x-1, y-18, anchor='sw', fill = 'gray', angle=90, text = a_name))
+            #self.__walls.append(self._canvas.create_text(x-1, y-18, anchor='sw', fill = 'gray', angle=90, text = a_name))
 
 
     
