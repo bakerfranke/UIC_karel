@@ -57,8 +57,16 @@ class RobotWorld(RobotWorldBase, Observer) :
         self._isVisible = False
         print("Creating ", name)
         self.trace_enabled = True #Ascii Robot world has trace enabled by default
+        self.display_mode = "karel"
 
     
+    def set_display_mode(self, mode):
+
+        if mode.lower() not in ("karel","chicago"): #make an acceptable list of modes
+            self.display_mode = "karel"
+        else:
+            self.display_mode = mode
+
     def run(self, task, *pargs):
        mainThread = threading.Thread(target = task, args=pargs)
        mainThread.start()
@@ -95,6 +103,9 @@ class RobotWorld(RobotWorldBase, Observer) :
         if amount < 0 : amount = 0
         if amount > 100 : amount = 100
         self.__delay = amount 
+
+    def setSpeed(self, amount):
+        self.setDelay(100-amount)
         
     def speedCheck(self):
         pass
