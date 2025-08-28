@@ -438,7 +438,7 @@ class KarelWindow(Frame):
             self.play_pause_btn.config(text="Play ")
 
 
-        #BEF NOTE: fix this so that we can have different streets and avenues.
+    #BEF NOTE: fix this so that we can have different streets and avenues.
     def setSize(self, streets, avenues = 10):         
         self.__streets = streets
         self.__avenues = avenues
@@ -584,14 +584,38 @@ class KarelWindow(Frame):
             self.__walls.append(self._canvas.create_line(x, y, tx, ty, fill= "red"))
 
 
+    street_names = ["madison","chicago","north","fullerton","belmont","irving park","lawrence","bryn mawr","touhy"]
+    avenue_names = ["harlem","narraganset","central","cicero","pulaski","kedzie","western","ashland","halsted","state"]
     def labelStreetsAvenues(self):
         for i in range(self.__streets):
             (x, y) = self._scaleToPixels(i + 1, .25)
+            #(bufferx, buffery) = self._scaleToPixels(i+0.25, .25)
+            bufferx = 0.33*self.__scaleFactor
+
             self.__walls.append(self._canvas.create_text(x,y, fill = 'black', text = str(i+1)))
+            if i < len(self.street_names):
+                s_name = self.street_names[i]
+            else:
+                s_name = f"street {i}"
+
+
+            self.__walls.append(self._canvas.create_text(x+bufferx, y-1, anchor='sw', fill = 'gray', text = s_name))
+
         
         for i in range(self.__avenues):
+
             (x,y) = self._scaleToPixels(.25, i + 1)
             self.__walls.append(self._canvas.create_text(x,y, fill = 'black', text = str(i+1)))
+
+            buffery = 0.33*self.__scaleFactor
+            if i < len(self.avenue_names):
+                a_name = self.avenue_names[i]
+            else:
+                a_name = f"avenue {i}"
+
+            self.__walls.append(self._canvas.create_text(x-1, y-18, anchor='sw', fill = 'gray', angle=90, text = a_name))
+
+
     
     def addRobot(self, street, avenue, direction, fill, outline):
         #        fill and outline are colors, default to blue, black
