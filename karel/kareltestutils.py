@@ -19,7 +19,7 @@ def getTestResultStr(test_name, test_desc, value, expected, result):
             f"{'-'*70}\n"
             f"TEST: {test_name}\n"
             f"{test_desc}\n"
-            f"     Value: {value}\n"
+            f"Your Robot: {value}\n"
             f"  Expected: {expected}\n"
             f"      Pass: {result}\n"
             )
@@ -110,7 +110,7 @@ def status_tuple_str(robot_or_tup):
         
     if tup[2] == North:
         dirstr = "North"
-    if tup[2]==East:
+    elif tup[2]==East:
         dirstr = "East"
     elif tup[2]==West:
         dirstr = "West"
@@ -140,8 +140,12 @@ def testWorldEquals(test_name, robot_world:RobotWorld, world_kwld_file:str):
     display_str += "\nComparing beeper locations and counts in your world v. expected\n"
 
     if diffs['diffs'] == True:
-        display_str += "DIFFERENECS...\n"
-        display_str += diffs['allbeeperdiffs']
+        display_str += (
+            f"   Num beepers found: {diffs['num_beepers_in_world']}\n"
+            f"Num beepers expected: {diffs['num_beepers_expected']}\n"
+            "DIFFERENCES...\n"
+            f"{diffs['allbeeperdiffs']}"
+        )
     else:
         display_str += "RESULT: Your world matches expected world! (Yay)"
 

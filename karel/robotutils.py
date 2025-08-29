@@ -35,6 +35,9 @@ def _status_to_str(status):
 def getBeepers(robot):
     return robot._UrRobot__beepers
 
+def getActionCount(robot):
+    return robot._UrRobot__action_count
+
 def getStatus(robot):
     return (robot._UrRobot__street, 
             robot._UrRobot__avenue,
@@ -130,7 +133,10 @@ def get_beeper_diffs(world_beepers, expected_beepers):
             - 'allbeeperdiffs': A multiline string showing the side-by-side comparison.
     """
     differences_found = False
+    num_beepers_correct = 0
     comparison_lines = []
+    total_expected_beeper_count = 0
+    total_actual_beeper_count = 0
 
     # Add column headings
     header = (
@@ -145,8 +151,11 @@ def get_beeper_diffs(world_beepers, expected_beepers):
     all_positions = set(world_beepers.keys()) | set(expected_beepers.keys())
 
     for position in sorted(all_positions):
-        robot_count = world_beepers.get(position, None)
+        robot_count = world_beepers.get(position, None)  #robot_count is a misnomer here.  Shuld be world_count
         expected_count = expected_beepers.get(position, None)
+
+        total_expected_beeper_count += expected_count or 0
+        total_actual_beeper_count += robot_count or 0
         
         if robot_count is None and expected_count > 0:  # Missing in robot world
             differences_found = True
@@ -168,15 +177,17 @@ def get_beeper_diffs(world_beepers, expected_beepers):
                 f"{f'{position[0]:<3} {position[1]:<3} {robot_count:<5}':<14}| "
                 f"{f'{position[0]:<3} {position[1]:<3} {expected_count:<5}':<14}"
             )
-        elif robot_count != None and expected_count != None:  # Matches correctly
-            comparison_lines.append(
-                f"{'   -'.ljust(8)}| "
-                f"{f'{position[0]:<3} {position[1]:<3} {robot_count:<5}':<14}| "
-                f"{f'{position[0]:<3} {position[1]:<3} {expected_count:<5}':<14}"
-            )
+        # elif robot_count != None and expected_count != None:  # Matches correctly
+        #     comparison_lines.append(
+        #         f"{'   -'.ljust(8)}| "
+        #         f"{f'{position[0]:<3} {position[1]:<3} {robot_count:<5}':<14}| "
+        #         f"{f'{position[0]:<3} {position[1]:<3} {expected_count:<5}':<14}"
+        #     )
 
     return {
         'diffs': differences_found,
+        'num_beepers_in_world': total_actual_beeper_count,
+        'num_beepers_expected': total_expected_beeper_count,
         'allbeeperdiffs': "\n".join(comparison_lines)
     }
 
