@@ -19,7 +19,7 @@ def getTestResultStr(test_name, test_desc, value, expected, result):
             f"{'-'*70}\n"
             f"TEST: {test_name}\n"
             f"{test_desc}\n"
-            f"     Value: {value}\n"
+            f"Your Robot: {value}\n"
             f"  Expected: {expected}\n"
             f"      Pass: {result}\n"
             )
@@ -41,7 +41,7 @@ def getTestResultStr(test_name, test_desc, value, expected, result):
 #                             result))
 #     return result
 
-def testRobotEquals(test_name, robot_or_status, expected_status_tuple, ignore_beepers=False, at_least_beepers=False, verbose=True):
+def testRobotEquals(test_name, robot_or_status, expected_status_tuple, ignore_beepers=False, at_least_beepers=False, verbose=True, ignore_direction=False):
     """
     Tests a robot's status (location, direction, beepers) against an expected status.
 
@@ -54,13 +54,15 @@ def testRobotEquals(test_name, robot_or_status, expected_status_tuple, ignore_be
     :return: True if the test passes, False otherwise.
     """
     # use robot utils function which handles robot-to-tuple conversion
-    result = util.robotEquals(robot_or_status, expected_status_tuple, ignoreBeepers=ignore_beepers, atLeastBeepers = at_least_beepers )
+    result = util.robotEquals(robot_or_status, expected_status_tuple, ignoreBeepers=ignore_beepers, atLeastBeepers = at_least_beepers, ignoreDirection = ignore_direction)
 
     # Handle beeper comparison
-    test_desc = "Testing Robot Location, Direction, Beepers"
-    if ignore_beepers:
-        test_desc = "Testing Robot Location and Direction (ignore beepers)"
-    elif at_least_beepers:
+    # test_desc = "Testing Robot Location, Direction, Beepers"
+    # if ignore_beepers or ignore_direction:
+    #     test_desc = f"Testing Robot Location{' (ignore Direction)' if ignore_direction else ', Direction'} {' (ignore beepers)' if ignore_beepers else ', Beepers'}"
+    test_desc = f"Testing Robot Location{' (ignore Direction)' if ignore_direction else ', Direction'} {' (ignore beepers)' if ignore_beepers else ', Beepers'}"
+
+    if at_least_beepers:
         test_desc = f"Testing Robot Location, Direction, (and at least {expected_status_tuple[3]} Beepers)"
 
     # Print results if needed
@@ -110,7 +112,7 @@ def status_tuple_str(robot_or_tup):
         
     if tup[2] == North:
         dirstr = "North"
-    if tup[2]==East:
+    elif tup[2]==East:
         dirstr = "East"
     elif tup[2]==West:
         dirstr = "West"
@@ -140,8 +142,12 @@ def testWorldEquals(test_name, robot_world:RobotWorld, world_kwld_file:str):
     display_str += "\nComparing beeper locations and counts in your world v. expected\n"
 
     if diffs['diffs'] == True:
-        display_str += "DIFFERENECS...\n"
-        display_str += diffs['allbeeperdiffs']
+        display_str += (
+            f"   Num beepers found: {diffs['num_beepers_in_world']}\n"
+            f"Num beepers expected: {diffs['num_beepers_expected']}\n"
+            "DIFFERENCES...\n"
+            f"{diffs['allbeeperdiffs']}"
+        )
     else:
         display_str += "RESULT: Your world matches expected world! (Yay)"
 

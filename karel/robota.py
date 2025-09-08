@@ -137,6 +137,7 @@ class UrRobot(_RobotSkeleton, Observable):
         self.notifyObservers(self.RobotState(self, self.createAction))
         self.__pausing = False
         self.__userPausing = False
+        self.__action_count = 0
         
 
 
@@ -231,6 +232,7 @@ class UrRobot(_RobotSkeleton, Observable):
             raise RobotNotRunning("Cannot move.")
         self.__speedCheck()
         self.__direction(self, world)
+        self.__action_count += 1
         self._perform_action(self.moveAction)
   
 
@@ -242,6 +244,7 @@ class UrRobot(_RobotSkeleton, Observable):
         self.__pause('turnOff')
         self.__speedCheck()
         self.__running = False;
+        self.__action_count += 1
         self._perform_action(self.turnOffAction)
 
 
@@ -253,7 +256,7 @@ class UrRobot(_RobotSkeleton, Observable):
             raise RobotNotRunning( "Cannot turnLeft.")
         self.__speedCheck()
         self.__direction = _nextDirection[self.__direction]
-
+        self.__action_count += 1
         self._perform_action(self.turnLeftAction)
 
     def setVisible(self, tf:bool):
@@ -272,6 +275,7 @@ class UrRobot(_RobotSkeleton, Observable):
             beepers = self.__beepers
             if beepers >= 0 :
                 self.__beepers = beepers + 1
+            self.__action_count += 1
             self._perform_action(self.pickBeeperAction)
 
         except NoBeepers as data : 
@@ -292,7 +296,9 @@ class UrRobot(_RobotSkeleton, Observable):
         if  beepers > 0 :
             self.__beepers = beepers - 1
             world.placeBeepers(self.__street, self.__avenue, 1)
+            self.__action_count += 1
         elif beepers == infinity :
+            self.__action_count += 1
             world.placeBeepers(self.__street, self.__avenue, 1)
         else :
             #self.turnOff()
