@@ -44,7 +44,7 @@ def getStatus(robot):
             robot._UrRobot__direction,
             robot._UrRobot__beepers)
 
-def robotEquals(robot_or_tuple_A, robot_or_tuple_B, ignoreBeepers=False, atLeastBeepers=False):
+def robotEquals(robot_or_tuple_A, robot_or_tuple_B, ignoreBeepers=False, atLeastBeepers=False, ignoreDirection=False):
     """
     Compares the status of a robot or a status tuple to another status tuple.
 
@@ -68,7 +68,8 @@ def robotEquals(robot_or_tuple_A, robot_or_tuple_B, ignoreBeepers=False, atLeast
     # Perform the location and direction comparison
     result = (robot_A[0] == robot_B[0] and  # Compare street
               robot_A[1] == robot_B[1] and  # Compare avenue
-              robot_A[2] == robot_B[2])     # Compare direction
+              (ignoreDirection or robot_A[2] == robot_B[2])  # Compare direction or ignore
+              )    
 
 
     # Handle beeper comparison based on flags

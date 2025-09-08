@@ -41,7 +41,7 @@ def getTestResultStr(test_name, test_desc, value, expected, result):
 #                             result))
 #     return result
 
-def testRobotEquals(test_name, robot_or_status, expected_status_tuple, ignore_beepers=False, at_least_beepers=False, verbose=True):
+def testRobotEquals(test_name, robot_or_status, expected_status_tuple, ignore_beepers=False, at_least_beepers=False, verbose=True, ignore_direction=False):
     """
     Tests a robot's status (location, direction, beepers) against an expected status.
 
@@ -54,13 +54,15 @@ def testRobotEquals(test_name, robot_or_status, expected_status_tuple, ignore_be
     :return: True if the test passes, False otherwise.
     """
     # use robot utils function which handles robot-to-tuple conversion
-    result = util.robotEquals(robot_or_status, expected_status_tuple, ignoreBeepers=ignore_beepers, atLeastBeepers = at_least_beepers )
+    result = util.robotEquals(robot_or_status, expected_status_tuple, ignoreBeepers=ignore_beepers, atLeastBeepers = at_least_beepers, ignoreDirection = ignore_direction)
 
     # Handle beeper comparison
-    test_desc = "Testing Robot Location, Direction, Beepers"
-    if ignore_beepers:
-        test_desc = "Testing Robot Location and Direction (ignore beepers)"
-    elif at_least_beepers:
+    # test_desc = "Testing Robot Location, Direction, Beepers"
+    # if ignore_beepers or ignore_direction:
+    #     test_desc = f"Testing Robot Location{' (ignore Direction)' if ignore_direction else ', Direction'} {' (ignore beepers)' if ignore_beepers else ', Beepers'}"
+    test_desc = f"Testing Robot Location{' (ignore Direction)' if ignore_direction else ', Direction'} {' (ignore beepers)' if ignore_beepers else ', Beepers'}"
+
+    if at_least_beepers:
         test_desc = f"Testing Robot Location, Direction, (and at least {expected_status_tuple[3]} Beepers)"
 
     # Print results if needed
