@@ -147,11 +147,19 @@ class RobotWorldBase:
     def readWorld(self, filename):
         "Read a world file that includes the locations of walls and beepers"
         allLines = open(filename).readlines() # an array of strings termined by newliens
+
+        numstreets = None
+        numavenues = None
+
         #print(allLines)
         for line in allLines: #open(filename).readlines() :
             words = line.split(" ")
             key = words[0]
-            if key == "beepers" :
+            if key == "streets":
+                numstreets = int(words[1])
+            elif key == "avenues":
+                numavenues = int(words[1])
+            elif key == "beepers" :
                 self.placeBeepers(int(words[1]), int(words[2]), int(words[3]))
             elif key == "eastwestwalls" :
                 street = int(words[1])
@@ -165,6 +173,15 @@ class RobotWorldBase:
                 while street <= int(words[3]) :
                     self.placeWallEastOf(street, avenue)
                     street += 1
+
+        if numstreets is None:
+            numstreets = 10
+        
+        if numavenues is None:
+            numavenues = 10
+        
+        self.setSize(numstreets, numavenues)
+
         print("Loaded:",filename)
     def readWorldWithPath(self, path, filename):
         pass
