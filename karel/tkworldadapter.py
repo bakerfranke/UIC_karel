@@ -228,10 +228,16 @@ class RobotWorld(RobotWorldBase, Observer) :
         
 #    def _visible(self, x, y, xBound, yBound):
 #        return x >= 0 and y >= 0 and x < xBound and y < yBound
-#        
+#    
+    def getSize(self):
+        return {"streets":self._streets, "avenues":self._avenues}
 
     def setSize(self, numberOfStreets=10, numberOfAvenues=10):
         global _window  
+        
+        self._streets = numberOfStreets
+        self._avenues = numberOfAvenues
+
         if _window == None :
             _window = KarelWindow(numberOfStreets, numberOfAvenues, world.speedCallback)       
         _window.setSize(numberOfStreets, numberOfAvenues)
