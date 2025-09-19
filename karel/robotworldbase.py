@@ -202,9 +202,19 @@ class RobotWorldBase:
         
     def getWorldString(self):
         "Get a string of the lines that would be written to a file"
+
+
         
         lines = []
         lines.append("KarelWorld\n")
+
+        if hasattr(self, "_streets") and hasattr(self, "_avenues"):
+            lines.append(f"streets {self._streets}\n")
+            lines.append(f"avenues {self._avenues}\n")
+        else:
+            lines.append("streets 10\n")
+            lines.append("avenues 10\n")
+
         for  (x,y) in self._beepers.keys() :
             lines.append("beepers " + str(x) + " " + str(y) + " " + str(self._beepers[(x,y)]) + "\n")
         for (x, y) in self._eastWestWalls.keys() :

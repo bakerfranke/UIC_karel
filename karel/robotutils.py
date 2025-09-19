@@ -38,6 +38,9 @@ def getBeepers(robot):
 def getActionCount(robot):
     return robot._UrRobot__action_count
 
+def getLocationList(robot):
+    return robot._UrRobot__location_list
+
 def getStatus(robot):
     return (robot._UrRobot__street, 
             robot._UrRobot__avenue,

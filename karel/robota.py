@@ -138,6 +138,10 @@ class UrRobot(_RobotSkeleton, Observable):
         self.__pausing = False
         self.__userPausing = False
         self.__action_count = 0
+        self.__location_list = [(street,avenue)]
+
+        # TO DO: USE ROBOT STATE OJECT TO LOG THIS
+        #self.__action_log = [_get_current_status()]
         
 
 
@@ -233,6 +237,7 @@ class UrRobot(_RobotSkeleton, Observable):
         self.__speedCheck()
         self.__direction(self, world)
         self.__action_count += 1
+        self.__location_list.append((self.__street, self.__avenue))
         self._perform_action(self.moveAction)
   
 
