@@ -47,6 +47,10 @@ def getStatus(robot):
             robot._UrRobot__direction,
             robot._UrRobot__beepers)
 
+def getStatusStr(robot):
+     return _status_to_str(getStatus(robot))
+
+
 def robotEquals(robot_or_tuple_A, robot_or_tuple_B, ignoreBeepers=False, atLeastBeepers=False, ignoreDirection=False):
     """
     Compares the status of a robot or a status tuple to another status tuple.
@@ -141,6 +145,7 @@ def get_beeper_diffs(world_beepers, expected_beepers):
     comparison_lines = []
     total_expected_beeper_count = 0
     total_actual_beeper_count = 0
+    correct_matches = 0
 
     # Add column headings
     header = (
@@ -181,7 +186,8 @@ def get_beeper_diffs(world_beepers, expected_beepers):
                 f"{f'{position[0]:<3} {position[1]:<3} {robot_count:<5}':<14}| "
                 f"{f'{position[0]:<3} {position[1]:<3} {expected_count:<5}':<14}"
             )
-        # elif robot_count != None and expected_count != None:  # Matches correctly
+        elif robot_count != None and expected_count != None:  # Matches correctly
+            correct_matches += 1
         #     comparison_lines.append(
         #         f"{'   -'.ljust(8)}| "
         #         f"{f'{position[0]:<3} {position[1]:<3} {robot_count:<5}':<14}| "
@@ -192,7 +198,8 @@ def get_beeper_diffs(world_beepers, expected_beepers):
         'diffs': differences_found,
         'num_beepers_in_world': total_actual_beeper_count,
         'num_beepers_expected': total_expected_beeper_count,
-        'allbeeperdiffs': "\n".join(comparison_lines)
+        'allbeeperdiffs': "\n".join(comparison_lines),
+        'correct_matches': correct_matches
     }
 
 

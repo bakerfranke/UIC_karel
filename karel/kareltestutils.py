@@ -147,6 +147,8 @@ def testWorldEquals(test_name, robot_world:RobotWorld, world_kwld_file:str):
             f"Num beepers expected: {diffs['num_beepers_expected']}\n"
             "DIFFERENCES...\n"
             f"{diffs['allbeeperdiffs']}"
+            f"\n"
+            f"CORRECT Beeper Placements: {diffs['correct_matches']}"
         )
     else:
         display_str += "RESULT: Your world matches expected world! (Yay)"
