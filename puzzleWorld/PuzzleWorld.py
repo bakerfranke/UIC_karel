@@ -86,15 +86,119 @@ class PuzzleWorld:
             self.current_word, self.scrambled_word = self.puzzle_sequence[idx]
             self.puzzle_index = index
 
-    def generate_puzzle(self):
-        """Advance to next puzzle in sequence."""
+    def __str__(self):
+        """
+        Return a readable summary of the world state for debugging or testing.
+        """
+        lines = []
+        lines.append("=== PuzzleWorld State ===")
+        lines.append(f"Treasure room: {self.treasure}")
+        lines.append(f"Hazard Type 1 rooms: {self.hazards['type1']}")
+        lines.append(f"Hazard Type 2 rooms: {self.hazards['type2']}")
+        lines.append(f"Current puzzle number: {self.puzzle_index}")
+        lines.append(f"Scrambled word: {self.scrambled_word}")
+        lines.append(f"Solution word: {self.current_word}")
+        lines.append("==========================")
+        return "\n".join(lines)
+
+    def generate_new_puzzle(self):
+        """Advance to next puzzle in sequence. And return it."""
         self._set_puzzle(self.puzzle_index + 1)
+        return self.get_puzzle()
+
+    def get_puzzle_word(self):
+        return self.scrambled_word
+
+    def get_puzzle_solution(self):
+        return self.current_word
+
 
     def get_puzzle(self):
-        return self.scrambled_word
+        return self.current_word, self.scrambled_word
+
 
     def check_solution(self, guess):
         return guess.lower() == self.current_word.lower()
+
+    def get_map_ascii(self):
+        """
+        Return a string showing an ASCII-art map of all locations and connections.
+        The layout is fixed — each location is placed at predetermined (row, col)
+        in a grid, and connections are drawn with `-` and `|` or `/ \\` etc.
+        """
+        # grid size (rows × cols)
+        rows = 25
+        cols = 60
+        # fill with spaces
+        grid = [[" "]*cols for _ in range(rows)]
+        
+        # Predefine positions for each location (row, col) in the grid
+        # You will need to pick these to look good.
+        # Example placeholder positions (you’ll adjust to make shape):
+        pos = {
+            1: (2, 30),
+            2: (5, 45),
+            3: (10, 50),
+            4: (15, 45),
+            5: (18, 30),
+            6: (15, 15),
+            7: (10, 10),
+            8: (5, 15),
+            9: (3, 25),
+            10: (7, 30),
+            11: (12, 35),
+            12: (17, 30),
+            13: (12, 25),
+            14: (8, 20),
+            15: (11, 45),
+            16: (14, 40),
+            17: (16, 25),
+            18: (13, 15),
+            19: (8, 40),
+            20: (12, 20),
+        }
+        
+        # Place node labels
+        for loc, (r, c) in pos.items():
+            s = str(loc)
+            for i, ch in enumerate(s):
+                if 0 <= c+i < cols:
+                    grid[r][c+i] = ch
+        
+        # Helper to draw a line between two positions (r1,c1) → (r2,c2)
+        def draw_line(r1, c1, r2, c2):
+            dr = r2 - r1
+            dc = c2 - c1
+            steps = max(abs(dr), abs(dc))
+            if steps == 0:
+                return
+            for i in range(1, steps):
+                rr = r1 + (dr * i) // steps
+                cc = c1 + (dc * i) // steps
+                # pick a character depending on slope
+                if dr == 0:
+                    ch = "-"
+                elif dc == 0:
+                    ch = "|"
+                else:
+                    # approximate diagonal
+                    ch = "/" if (dr * dc) > 0 else "\\"
+                grid[rr][cc] = ch
+        
+        # Draw connections
+        for loc, neighbors in self.rooms.items():
+            r1, c1 = pos[loc]
+            for nb in neighbors:
+                r2, c2 = pos[nb]
+                draw_line(r1, c1, r2, c2)
+        
+        # Combine into one string
+        lines = ["".join(row).rstrip() for row in grid]
+        return "\n".join(lines)
+    
+    
+    def show_map(self):
+        print(self.get_map_ascii())
 
     # ---------- Hazard/Treasure getters ----------
     def get_adjacent_rooms(self, room):
@@ -115,7 +219,7 @@ class PuzzleWorld:
     def get_treasure_room(self):
         return self.treasure
 
-    def is_treasure(self, room):
+    def has_treasure(self, room):
         return room == self.treasure
 
     def is_treasure_adjacent(self, room):
@@ -123,13 +227,15 @@ class PuzzleWorld:
 
 if __name__ =="__main__":
 
-    gw = PuzzleWorld(1121)
+    W = PuzzleWorld(1121)
+    print(W)
+    W.show_map()
 
-    print("Treasure room:", gw.get_treasure_room())
-    print("Puzzle:", gw.get_puzzle())
-    print("Check guess:", gw.check_solution("lantern"))
-    print("Hazzards", gw.hazards)
-    print(gw.get_adjacent_rooms(4))
-    print("Puzzles")
-    for i in range(len(gw.puzzle_sequence)):
-        print(gw.puzzle_sequence[i])
+    # print("Treasure room:", gw.get_treasure_room())
+    # print("Puzzle:", gw.get_puzzle())
+    # print("Check guess:", gw.check_solution("lantern"))
+    # print("Hazzards", gw.hazards)
+    # print(gw.get_adjacent_rooms(4))
+    # print("Puzzles")
+    # for i in range(len(gw.puzzle_sequence)):
+    #     print(gw.puzzle_sequence[i])
