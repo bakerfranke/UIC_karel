@@ -1,4 +1,5 @@
 import random
+import re
 
 class PuzzleWorld:
     def __init__(self, seed=None):
@@ -120,86 +121,101 @@ class PuzzleWorld:
     def check_solution(self, guess):
         return guess.lower() == self.current_word.lower()
 
-    def get_map_ascii(self):
-        """
-        Return a string showing an ASCII-art map of all locations and connections.
-        The layout is fixed — each location is placed at predetermined (row, col)
-        in a grid, and connections are drawn with `-` and `|` or `/ \\` etc.
-        """
-        # grid size (rows × cols)
-        rows = 25
-        cols = 60
-        # fill with spaces
-        grid = [[" "]*cols for _ in range(rows)]
-        
-        # Predefine positions for each location (row, col) in the grid
-        # You will need to pick these to look good.
-        # Example placeholder positions (you’ll adjust to make shape):
-        pos = {
-            1: (2, 30),
-            2: (5, 45),
-            3: (10, 50),
-            4: (15, 45),
-            5: (18, 30),
-            6: (15, 15),
-            7: (10, 10),
-            8: (5, 15),
-            9: (3, 25),
-            10: (7, 30),
-            11: (12, 35),
-            12: (17, 30),
-            13: (12, 25),
-            14: (8, 20),
-            15: (11, 45),
-            16: (14, 40),
-            17: (16, 25),
-            18: (13, 15),
-            19: (8, 40),
-            20: (12, 20),
-        }
-        
-        # Place node labels
-        for loc, (r, c) in pos.items():
-            s = str(loc)
-            for i, ch in enumerate(s):
-                if 0 <= c+i < cols:
-                    grid[r][c+i] = ch
-        
-        # Helper to draw a line between two positions (r1,c1) → (r2,c2)
-        def draw_line(r1, c1, r2, c2):
-            dr = r2 - r1
-            dc = c2 - c1
-            steps = max(abs(dr), abs(dc))
-            if steps == 0:
-                return
-            for i in range(1, steps):
-                rr = r1 + (dr * i) // steps
-                cc = c1 + (dc * i) // steps
-                # pick a character depending on slope
-                if dr == 0:
-                    ch = "-"
-                elif dc == 0:
-                    ch = "|"
-                else:
-                    # approximate diagonal
-                    ch = "/" if (dr * dc) > 0 else "\\"
-                grid[rr][cc] = ch
-        
-        # Draw connections
-        for loc, neighbors in self.rooms.items():
-            r1, c1 = pos[loc]
-            for nb in neighbors:
-                r2, c2 = pos[nb]
-                draw_line(r1, c1, r2, c2)
-        
-        # Combine into one string
-        lines = ["".join(row).rstrip() for row in grid]
-        return "\n".join(lines)
-    
-    
-    def show_map(self):
-        print(self.get_map_ascii())
+    # def get_map_ascii(self):
+    #     """
+    #     Return a fixed ASCII-art map of the 20-location world.
+    #     This version preserves the classic 'Hunt the Wumpus' circular layout
+    #     with proper spacing and connections using slashes and underscores.
+    #     """
+    #     map_str = r"""
+    #           ______18______             
+    #          /      |       \           
+    #         /      _9__      \          
+    #        /      /    \      \        
+    #       /      /      \      \       
+    #      17     8        10     19       
+    #      | \   / \      /  \   / |    
+    #      |  \ /   \    /    \ /  |    
+    #      |   7     1---2     11  |       
+    #      |   |    /     \    |   |      
+    #      |   6----5     3---12   |       
+    #      |   |     \   /     |   |      
+    #      |   \       4      /    |      
+    #      |    \      |     /     |      
+    #      \     15---14---13     /       
+    #       \   /            \   /       
+    #        \ /              \ /        
+    #         16---------------20
+    #     """
+    #     return map_str.strip("\n")
 
+
+
+
+    def get_map_ansi(self, highlights=None):
+        """
+        Return a large-dot (●) circular map with ANSI color.
+        Dots are faint gray; numbers are bold, bright, and colored.
+        """
+
+        base_map = r"""
+                  ● ● ● ● 18 ● ● ● ●            
+                 ●                  ●           
+                ●     ● ● 9 ● ●      ●          
+               ●     ●         ●      ●        
+              ●     ●           ●      ●    
+             17     8           10      19       
+             ● ●   ●  ●        ●  ●    ● ●       
+             ●  ● ●    ●      ●    ●  ●  ●    
+             ●   7       1 ● 2      11   ●       
+             ●   ●      ●    ●       ●   ●      
+             ●   6 ● ● 5      3 ● ● 12   ●       
+             ●   ●      ●    ●       ●   ●      
+             ●   ●         4        ●    ●       
+             ●    ●        ●       ●     ●       
+             ●     15 ● ● 14 ● ● 13      ●           
+              ●   ●                ●    ●        
+               ● ●                  ●  ●        
+                16 ● ● ● ● ● ● ● ● ● 20
+        """.rstrip("\n")
+
+        # ANSI codes
+        ESC = "\x1b"
+        RESET = f"{ESC}[0m"
+        BOLD = f"{ESC}[1m"
+        DIM = f"{ESC}[90m"
+        WHITE = f"{ESC}[97m"
+        BLUE_BG = f"{ESC}[44m"
+        RED_BG = f"{ESC}[41m"
+        GREEN_BG = f"{ESC}[42m"
+        YELLOW_BG = f"{ESC}[43m"
+
+        color_map = highlights or {}
+
+        # Step 1: Start all text as faint gray
+        styled = f"{DIM}{base_map}{RESET}"
+
+        # Step 2: Replace numbers, keeping dim gray after each reset
+        def style_number(match):
+            num = int(match.group(0))
+            bg = color_map.get(num, BLUE_BG)
+            # temporarily turn off dim, show bold+bright, then return to dim
+            return f"{RESET}{WHITE}{bg}{num}{RESET}{DIM}"
+
+        for n in range(20, 0, -1):
+            styled = re.sub(rf"(?<!\d){n}(?!\d)", style_number, styled)
+
+        # Step 3: make sure the map ends cleanly
+        styled += RESET
+        return styled
+
+
+
+    def show_map(self):
+        """Print the ASCII-art map of all 20 locations."""
+        print(self.get_map_ansi())
+    
+ 
     # ---------- Hazard/Treasure getters ----------
     def get_adjacent_rooms(self, room):
         return self.rooms[room]
