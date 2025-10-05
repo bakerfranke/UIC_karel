@@ -1,23 +1,29 @@
 import random
 import re
+from collections import deque
 
 class PuzzleWorld:
-    def __init__(self, seed=None):
+    def __init__(self, seed=None, verbose=False):
         """
         Create a new GameWorld.
         
         Args:
             seed (int, optional): seed for random number generator 
                                   (useful for deterministic testing).
+            verbose (bool): whether to print generation details.
         """
-        self.rng = random.Random(seed)
+        import random
 
+        self.verbose = verbose
+        self.seed = seed if seed is not None else random.randint(0, 999999)
+        self.rng = random.Random(self.seed)
+
+        # world structure
         self.rooms = self._generate_dodecahedron()
         self.hazards = {"type1": [], "type2": []}
         self.treasure = None
 
         # puzzle handling
-        #self.word_list = word_list[:]  # copy
         self.word_list = self._load_words("words.txt")
         self.puzzle_sequence = []
         self.puzzle_index = 0
@@ -25,7 +31,11 @@ class PuzzleWorld:
         self.scrambled_word = None
 
         self._prepare_puzzles()
-        self.generate_world()
+
+        # generate a valid world, bumping seed if necessary
+        self.seed = self._generate_valid_world(self.seed)
+        if self.verbose:
+            print(f"Final seed: {self.seed}")
 
     # ---------- World generation ----------
     def _generate_dodecahedron(self):
@@ -52,6 +62,32 @@ class PuzzleWorld:
             20: [13, 16, 19]
         }
 
+    def _generate_valid_world(self, base_seed):
+        """
+        Try generating worlds from base_seed, incrementing until one passes validation.
+        Returns the final seed used to produce a valid configuration.
+        """
+
+        MAX_ATTEMPTS = 1000
+        seed = base_seed
+
+        for attempt in range(MAX_ATTEMPTS):
+            self.rng.seed(seed)
+            self.generate_world()  # existing method
+            ok, reason = self.validate_world(verbose=self.verbose)
+
+            if ok:
+                if self.verbose:
+                    print(f"Valid world generated (base seed={base_seed}, final seed={seed})")
+                return seed
+
+            if self.verbose:
+                print(f"⚠Invalid world (seed {seed}): {reason}; trying {seed+1}")
+            seed += 1
+
+        raise RuntimeError("Failed to generate valid world after 1000 attempts.")
+
+
     def generate_world(self):
         rooms = list(self.rooms.keys())
         self.treasure = self.rng.choice(rooms)
@@ -59,7 +95,69 @@ class PuzzleWorld:
         self.hazards["type2"] = self.rng.sample(
             [r for r in rooms if r != self.treasure and r not in self.hazards["type1"]], 2
         )
+        self.puzzles = self.rng.sample(
+            [r for r in rooms if r != self.treasure and r not in self.hazards["type1"] and r not in self.hazards["type2"]], 2
+        )
         self._set_puzzle(0)
+
+    def validate_world(self, verbose=False):
+        """
+        Strong validator:
+        Ensures every non-hazard (safe) room can reach both puzzle rooms and the treasure
+        without passing through a hazard.
+        """
+
+        rooms = list(self.rooms.keys())
+        hazards = set(self.hazards.get("type1", [])) | set(self.hazards.get("type2", []))
+        puzzles = set(getattr(self, "puzzles", []))
+        treasure = getattr(self, "treasure", None)
+
+        # === Basic checks ===
+        if treasure is None:
+            return (False, "Treasure not set.")
+        if not puzzles or len(puzzles) < 2:
+            return (False, "Missing puzzle rooms.")
+        if len(set(hazards | puzzles | {treasure})) < len(hazards) + len(puzzles) + 1:
+            return (False, "Overlapping treasure/puzzles/hazards.")
+
+        # === No key items in hazards ===
+        if treasure in hazards:
+            return (False, f"Treasure in hazard {treasure}")
+        for p in puzzles:
+            if p in hazards:
+                return (False, f"Puzzle room {p} in hazard")
+
+        # === Build safe graph ===
+        safe_rooms = [r for r in rooms if r not in hazards]
+        safe_graph = {r: [n for n in self.rooms[r] if n in safe_rooms] for r in safe_rooms}
+
+        # === Helper BFS ===
+        def reachable_from(start):
+            visited = set()
+            q = deque([start])
+            while q:
+                r = q.popleft()
+                visited.add(r)
+                for n in safe_graph[r]:
+                    if n not in visited:
+                        q.append(n)
+            return visited
+
+        # === Test all safe rooms ===
+        for start in safe_rooms:
+            visited = reachable_from(start)
+            needed = puzzles | {treasure}
+            if not needed.issubset(visited):
+                if verbose:
+                    print(f"❌ Room {start} cannot reach {needed - visited}")
+                return (False, f"Start room {start} cannot reach all objectives")
+
+        if verbose:
+            print(f"✅ All {len(safe_rooms)} safe rooms can reach puzzles {puzzles} and treasure {treasure}")
+
+        return (True, "OK")
+
+
 
     # ---------- Puzzle preparation ----------
     def _load_words(self, filename):
@@ -96,6 +194,7 @@ class PuzzleWorld:
         lines.append(f"Treasure room: {self.treasure}")
         lines.append(f"Hazard Type 1 rooms: {self.hazards['type1']}")
         lines.append(f"Hazard Type 2 rooms: {self.hazards['type2']}")
+        lines.append(f"Puzzle Rooms: {self.puzzles}")
         lines.append(f"Current puzzle number: {self.puzzle_index}")
         lines.append(f"Scrambled word: {self.scrambled_word}")
         lines.append(f"Solution word: {self.current_word}")
@@ -189,6 +288,8 @@ class PuzzleWorld:
         RED_BG = f"{ESC}[41m"
         GREEN_BG = f"{ESC}[42m"
         YELLOW_BG = f"{ESC}[43m"
+        BLACK = "\x1b[30m"
+        WHITE_BG = "\x1b[47m"
 
         color_map = highlights or {}
 
@@ -201,6 +302,7 @@ class PuzzleWorld:
             bg = color_map.get(num, BLUE_BG)
             # temporarily turn off dim, show bold+bright, then return to dim
             return f"{RESET}{WHITE}{bg}{num}{RESET}{DIM}"
+
 
         for n in range(20, 0, -1):
             styled = re.sub(rf"(?<!\d){n}(?!\d)", style_number, styled)
@@ -241,11 +343,35 @@ class PuzzleWorld:
     def is_treasure_adjacent(self, room):
         return self.treasure in self.rooms[room]
 
+
+
 if __name__ =="__main__":
 
-    W = PuzzleWorld(1121)
-    print(W)
-    W.show_map()
+    seed = 1140
+    #for i in range(seed, seed+100):
+    W = PuzzleWorld(seed, verbose=True)
+    #print(W)
+    # W.show_map()
+    #print(W.validate_world())
+   #  valid_count = 0
+   #  map_count = 0
+   # # map_num = seed+map_count
+   #  while(valid_count < 100):
+   #      map_num = seed+map_count
+   #      W = PuzzleWorld(map_num)
+   #      print("map #", map_num)
+   #      #print(W)
+   #      if(W.validate_world()[0] == True):
+   #          valid_count+=1
+   #          #print("  valid")
+   #      else:
+   #          print("   invalid")
+   #      map_count+=1
+
+   #  print("valid count",valid_count)
+   #  print("map_count",map_count)
+
+        
 
     # print("Treasure room:", gw.get_treasure_room())
     # print("Puzzle:", gw.get_puzzle())
