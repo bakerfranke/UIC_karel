@@ -30,6 +30,10 @@ class PuzzleWorld:
         self.current_word = None
         self.scrambled_word = None
 
+        self.number_puzzle_sequence = []
+        self.number_puzzle_index = 0
+
+
         self._prepare_puzzles()
 
         # generate a valid world, bumping seed if necessary
@@ -166,24 +170,59 @@ class PuzzleWorld:
             return [line.strip() for line in f if line.strip()]
 
     def _prepare_puzzles(self):
-        """Shuffle word list and pre-scramble all puzzles."""
+        """Precompute both word and number puzzles deterministically."""
+
+        # ---- Word puzzles ----
         words = self.word_list[:]
         self.rng.shuffle(words)
         self.puzzle_sequence = []
         for w in words:
             scrambled = list(w)
             self.rng.shuffle(scrambled)
-            self.puzzle_sequence.append((w, "".join(scrambled)))
+            self.puzzle_sequence.append({
+                "type": "word",
+                "question": f"Unscramble this word: {''.join(scrambled)}",
+                "answer": w.lower()
+            })
+
+        # ---- Number puzzles ----
+        num_number_puzzles=50
+        self.number_puzzle_sequence = []
+        for _ in range(num_number_puzzles):
+            pattern_type = self.rng.choice(["arithmetic", "geometric"])
+            start = self.rng.randint(1, 9)
+            step = self.rng.randint(2, 5)
+
+            if pattern_type == "arithmetic":
+                seq = [start + i * step for i in range(4)]
+                answer = str(start + 4 * step)
+            else:
+                seq = [start * (step ** i) for i in range(4)]
+                answer = str(start * (step ** 4))
+
+            question = f"What number comes next? {', '.join(map(str, seq))}, ..."
+            self.number_puzzle_sequence.append({
+                "type": "number",
+                "question": question,
+                "answer": answer
+            })
 
     def _set_puzzle(self, index):
         """Activate puzzle at given index."""
-        if index < len(self.puzzle_sequence):
-            self.current_word, self.scrambled_word = self.puzzle_sequence[index]
-            self.puzzle_index = index
-        else:
-            idx = index % len(self.puzzle_sequence)
-            self.current_word, self.scrambled_word = self.puzzle_sequence[idx]
-            self.puzzle_index = index
+        if not self.puzzle_sequence:
+            self._prepare_puzzles()
+
+        idx = index % len(self.puzzle_sequence)
+        p = self.puzzle_sequence[idx]
+
+        if isinstance(p, dict):  # new puzzle format
+            self.current_word = p.get("answer")
+            self.scrambled_word = re.sub(r"^Unscramble this word:\s*", "", p.get("question", ""))
+        else:  # old tuple format (backward compatible)
+            self.current_word, self.scrambled_word = p
+
+        self.puzzle_index = index
+
 
     def __str__(self):
         """
@@ -195,58 +234,91 @@ class PuzzleWorld:
         lines.append(f"Hazard Type 1 rooms: {self.hazards['type1']}")
         lines.append(f"Hazard Type 2 rooms: {self.hazards['type2']}")
         lines.append(f"Puzzle Rooms: {self.puzzles}")
-        lines.append(f"Current puzzle number: {self.puzzle_index}")
-        lines.append(f"Scrambled word: {self.scrambled_word}")
-        lines.append(f"Solution word: {self.current_word}")
+
+        # --- Word puzzle info ---
+        lines.append(f"Current word puzzle index: {self.puzzle_index}")
+        if self.puzzle_sequence:
+            lines.append(f"Scrambled word: {self.scrambled_word}")
+            lines.append(f"Solution word: {self.current_word}")
+        else:
+            lines.append("No word puzzles prepared.")
+
+        # --- Number puzzle info ---
+        lines.append(f"Current number puzzle index: {self.number_puzzle_index}")
+        if getattr(self, "number_puzzle_sequence", []):
+            idx = self.number_puzzle_index % len(self.number_puzzle_sequence)
+            p = self.number_puzzle_sequence[idx]
+            lines.append(f"Number puzzle question: {p['question']}")
+            lines.append(f"Number puzzle answer: {p['answer']}")
+        else:
+            lines.append("No number puzzles prepared.")
+
         lines.append("==========================")
         return "\n".join(lines)
 
-    def generate_new_puzzle(self):
-        """Advance to next puzzle in sequence. And return it."""
-        self._set_puzzle(self.puzzle_index + 1)
-        return self.get_puzzle()
+    # def generate_new_puzzle(self):
+    #     """Advance to next puzzle in sequence. And return it."""
+    #     self._set_puzzle(self.puzzle_index + 1)
+    #     return self.get_puzzle()
 
-    def get_puzzle_word(self):
-        return self.scrambled_word
+    # def get_puzzle_word(self):
+    #     return self.scrambled_word
 
-    def get_puzzle_solution(self):
-        return self.current_word
-
-
-    def get_puzzle(self):
-        return self.current_word, self.scrambled_word
+    # def get_puzzle_solution(self):
+    #     return self.current_word
 
 
-    def check_solution(self, guess):
-        return guess.lower() == self.current_word.lower()
+    # def get_puzzle(self):
+    #     return self.current_word, self.scrambled_word
 
-    # def get_map_ascii(self):
-    #     """
-    #     Return a fixed ASCII-art map of the 20-location world.
-    #     This version preserves the classic 'Hunt the Wumpus' circular layout
-    #     with proper spacing and connections using slashes and underscores.
-    #     """
-    #     map_str = r"""
-    #           ______18______             
-    #          /      |       \           
-    #         /      _9__      \          
-    #        /      /    \      \        
-    #       /      /      \      \       
-    #      17     8        10     19       
-    #      | \   / \      /  \   / |    
-    #      |  \ /   \    /    \ /  |    
-    #      |   7     1---2     11  |       
-    #      |   |    /     \    |   |      
-    #      |   6----5     3---12   |       
-    #      |   |     \   /     |   |      
-    #      |   \       4      /    |      
-    #      |    \      |     /     |      
-    #      \     15---14---13     /       
-    #       \   /            \   /       
-    #        \ /              \ /        
-    #         16---------------20
-    #     """
-    #     return map_str.strip("\n")
+    def get_next_word_puzzle(self):
+        """Return the next precomputed word puzzle [question, answer]."""
+        # if not self.puzzle_sequence:
+        #     self._prepare_puzzles()
+        p = self.puzzle_sequence[self.puzzle_index % len(self.puzzle_sequence)]
+        self.puzzle_index += 1
+        return [p["question"], p["answer"]]
+
+
+    def get_next_number_puzzle(self):
+        """Return the next precomputed number puzzle [question, answer]."""
+        # if not self.number_puzzle_sequence:
+        #     self._prepare_puzzles()
+        p = self.number_puzzle_sequence[self.number_puzzle_index % len(self.number_puzzle_sequence)]
+        self.number_puzzle_index += 1
+        return [p["question"], p["answer"]]
+
+
+    # def check_solution(self, guess):
+    #     return guess.lower() == self.current_word.lower()
+
+    def get_map_ascii(self):
+        """
+        Return a fixed ASCII-art map of the 20-location world.
+        This version preserves the classic 'Hunt the Wumpus' circular layout
+        with proper spacing and connections using slashes and underscores.
+        """
+        map_str = r"""
+              ______18______             
+             /      |       \           
+            /      _9__      \          
+           /      /    \      \        
+          /      /      \      \       
+         17     8        10     19       
+         | \   / \      /  \   / |    
+         |  \ /   \    /    \ /  |    
+         |   7     1---2     11  |       
+         |   |    /     \    |   |      
+         |   6----5     3---12   |       
+         |   |     \   /     |   |      
+         |   \       4      /    |      
+         |    \      |     /     |      
+         \     15---14---13     /       
+          \   /            \   /       
+           \ /              \ /        
+            16---------------20
+        """
+        return map_str.strip("\n")
 
 
 
@@ -258,24 +330,24 @@ class PuzzleWorld:
         """
 
         base_map = r"""
-                  ● ● ● ● 18 ● ● ● ●            
-                 ●                  ●           
-                ●     ● ● 9 ● ●      ●          
-               ●     ●         ●      ●        
-              ●     ●           ●      ●    
-             17     8           10      19       
-             ● ●   ●  ●        ●  ●    ● ●       
-             ●  ● ●    ●      ●    ●  ●  ●    
-             ●   7       1 ● 2      11   ●       
-             ●   ●      ●    ●       ●   ●      
-             ●   6 ● ● 5      3 ● ● 12   ●       
-             ●   ●      ●    ●       ●   ●      
-             ●   ●         4        ●    ●       
-             ●    ●        ●       ●     ●       
-             ●     15 ● ● 14 ● ● 13      ●           
-              ●   ●                ●    ●        
-               ● ●                  ●  ●        
-                16 ● ● ● ● ● ● ● ● ● 20
+             ● ● ● ● 18 ● ● ● ●            
+            ●                  ●           
+           ●     ● ● 9 ● ●      ●          
+          ●     ●         ●      ●        
+         ●     ●           ●      ●    
+        17     8           10      19       
+        ● ●   ●  ●        ●  ●    ● ●       
+        ●  ● ●    ●      ●    ●  ●  ●    
+        ●   7       1 ● 2      11   ●       
+        ●   ●      ●    ●       ●   ●      
+        ●   6 ● ● 5      3 ● ● 12   ●       
+        ●   ●      ●    ●       ●   ●      
+        ●   ●         4        ●    ●       
+        ●    ●        ●       ●     ●       
+        ●     15 ● ● 14 ● ● 13      ●           
+         ●   ●                ●    ●        
+          ● ●                  ●  ●        
+           16 ● ● ● ● ● ● ● ● ● 20
         """.rstrip("\n")
 
         # ANSI codes
@@ -295,6 +367,7 @@ class PuzzleWorld:
 
         # Step 1: Start all text as faint gray
         styled = f"{DIM}{base_map}{RESET}"
+        #styled = f"{base_map}"
 
         # Step 2: Replace numbers, keeping dim gray after each reset
         def style_number(match):
@@ -302,6 +375,7 @@ class PuzzleWorld:
             bg = color_map.get(num, BLUE_BG)
             # temporarily turn off dim, show bold+bright, then return to dim
             return f"{RESET}{WHITE}{bg}{num}{RESET}{DIM}"
+            #return f"{num}"
 
 
         for n in range(20, 0, -1):
@@ -313,9 +387,12 @@ class PuzzleWorld:
 
 
 
-    def show_map(self):
+    def print_map(self, type="ansi"):
         """Print the ASCII-art map of all 20 locations."""
-        print(self.get_map_ansi())
+        if type == "ascii":
+            print(self.get_map_ascii())
+        else:
+            print(self.get_map_ansi())
     
  
     # ---------- Hazard/Treasure getters ----------
@@ -347,11 +424,15 @@ class PuzzleWorld:
 
 if __name__ =="__main__":
 
-    seed = 1140
+    seed = 1042025
     #for i in range(seed, seed+100):
     W = PuzzleWorld(seed, verbose=True)
-    #print(W)
-    # W.show_map()
+    print(W)
+    W.print_map()
+    W.print_map("ascii")
+
+    for i in range(10):
+        print(W.get_next_number_puzzle())
     #print(W.validate_world())
    #  valid_count = 0
    #  map_count = 0
