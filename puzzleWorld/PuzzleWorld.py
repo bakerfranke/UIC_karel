@@ -19,16 +19,15 @@ class PuzzleWorld:
         self.rng = random.Random(self.seed)
 
         # world structure
-        self.rooms = self._generate_dodecahedron()
+        self.locations = self._generate_dodecahedron()
         self.hazards = {"type1": [], "type2": []}
+        self.puzzles = []
         self.treasure = None
 
         # puzzle handling
         self.word_list = self._load_words("words.txt")
-        self.puzzle_sequence = []
-        self.puzzle_index = 0
-        self.current_word = None
-        self.scrambled_word = None
+        self.word_puzzle_sequence = []
+        self.word_puzzle_index = 0
 
         self.number_puzzle_sequence = []
         self.number_puzzle_index = 0
@@ -77,13 +76,18 @@ class PuzzleWorld:
 
         for attempt in range(MAX_ATTEMPTS):
             self.rng.seed(seed)
-            self.generate_world()  # existing method
-            ok, reason = self.validate_world(verbose=self.verbose)
+            self._generate_world()  # existing method
+            ok, reason = self._validate_world(verbose=self.verbose)
 
             if ok:
                 if self.verbose:
-                    print(f"Valid world generated (base seed={base_seed}, final seed={seed})")
+                    if base_seed != seed:
+                        print(f"Original seed ({base_seed}) generated an invalid world. Used next seed={seed} that generated a valid world.")
+                    else:
+                        print(f"Valid world generated (base seed={base_seed}")
                 return seed
+
+
 
             if self.verbose:
                 print(f"⚠Invalid world (seed {seed}): {reason}; trying {seed+1}")
@@ -92,26 +96,28 @@ class PuzzleWorld:
         raise RuntimeError("Failed to generate valid world after 1000 attempts.")
 
 
-    def generate_world(self):
-        rooms = list(self.rooms.keys())
-        self.treasure = self.rng.choice(rooms)
-        self.hazards["type1"] = self.rng.sample([r for r in rooms if r != self.treasure], 2)
+    def _generate_world(self):
+        """ Pick random locations for objects that don't clobber each other. Pick locations in
+            this order: treasure, 2x type1 hazards, 2x type2 hazards, 2x puzzles"""
+
+        locations = list(self.locations.keys())
+        self.treasure = self.rng.choice(locations)
+        self.hazards["type1"] = self.rng.sample([r for r in locations if r != self.treasure], 2)
         self.hazards["type2"] = self.rng.sample(
-            [r for r in rooms if r != self.treasure and r not in self.hazards["type1"]], 2
+            [r for r in locations if r != self.treasure and r not in self.hazards["type1"]], 2
         )
         self.puzzles = self.rng.sample(
-            [r for r in rooms if r != self.treasure and r not in self.hazards["type1"] and r not in self.hazards["type2"]], 2
+            [r for r in locations if r != self.treasure and r not in self.hazards["type1"] and r not in self.hazards["type2"]], 2
         )
-        self._set_puzzle(0)
 
-    def validate_world(self, verbose=False):
+    def _validate_world(self, verbose=False):
         """
-        Strong validator:
-        Ensures every non-hazard (safe) room can reach both puzzle rooms and the treasure
+        Map validator:
+        Ensures every non-hazard (safe) location can reach both puzzle locations and the treasure
         without passing through a hazard.
         """
 
-        rooms = list(self.rooms.keys())
+        locations = list(self.locations.keys())
         hazards = set(self.hazards.get("type1", [])) | set(self.hazards.get("type2", []))
         puzzles = set(getattr(self, "puzzles", []))
         treasure = getattr(self, "treasure", None)
@@ -120,7 +126,7 @@ class PuzzleWorld:
         if treasure is None:
             return (False, "Treasure not set.")
         if not puzzles or len(puzzles) < 2:
-            return (False, "Missing puzzle rooms.")
+            return (False, "Missing puzzle locations.")
         if len(set(hazards | puzzles | {treasure})) < len(hazards) + len(puzzles) + 1:
             return (False, "Overlapping treasure/puzzles/hazards.")
 
@@ -129,11 +135,11 @@ class PuzzleWorld:
             return (False, f"Treasure in hazard {treasure}")
         for p in puzzles:
             if p in hazards:
-                return (False, f"Puzzle room {p} in hazard")
+                return (False, f"Puzzle location {p} in hazard")
 
         # === Build safe graph ===
-        safe_rooms = [r for r in rooms if r not in hazards]
-        safe_graph = {r: [n for n in self.rooms[r] if n in safe_rooms] for r in safe_rooms}
+        safe_locations = [r for r in locations if r not in hazards]
+        safe_graph = {r: [n for n in self.locations[r] if n in safe_locations] for r in safe_locations}
 
         # === Helper BFS ===
         def reachable_from(start):
@@ -147,17 +153,17 @@ class PuzzleWorld:
                         q.append(n)
             return visited
 
-        # === Test all safe rooms ===
-        for start in safe_rooms:
+        # === Test all safe locations ===
+        for start in safe_locations:
             visited = reachable_from(start)
             needed = puzzles | {treasure}
             if not needed.issubset(visited):
                 if verbose:
-                    print(f"❌ Room {start} cannot reach {needed - visited}")
-                return (False, f"Start room {start} cannot reach all objectives")
+                    print(f"❌ location {start} cannot reach {needed - visited}")
+                return (False, f"Start location {start} cannot reach all objectives")
 
         if verbose:
-            print(f"✅ All {len(safe_rooms)} safe rooms can reach puzzles {puzzles} and treasure {treasure}")
+            print(f"✅ All {len(safe_locations)} safe locations can reach puzzles {puzzles} and treasure {treasure}")
 
         return (True, "OK")
 
@@ -170,23 +176,23 @@ class PuzzleWorld:
             return [line.strip() for line in f if line.strip()]
 
     def _prepare_puzzles(self):
-        """Precompute both word and number puzzles deterministically."""
+        """Precompute both word and number puzzles so they have a deterministic sequence based on world's random seed."""
 
         # ---- Word puzzles ----
         words = self.word_list[:]
         self.rng.shuffle(words)
-        self.puzzle_sequence = []
+        self.word_puzzle_sequence = []
         for w in words:
             scrambled = list(w)
             self.rng.shuffle(scrambled)
-            self.puzzle_sequence.append({
+            self.word_puzzle_sequence.append({
                 "type": "word",
                 "question": f"Unscramble this word: {''.join(scrambled)}",
                 "answer": w.lower()
             })
 
         # ---- Number puzzles ----
-        num_number_puzzles=50
+        num_number_puzzles=100
         self.number_puzzle_sequence = []
         for _ in range(num_number_puzzles):
             pattern_type = self.rng.choice(["arithmetic", "geometric"])
@@ -207,22 +213,6 @@ class PuzzleWorld:
                 "answer": answer
             })
 
-    def _set_puzzle(self, index):
-        """Activate puzzle at given index."""
-        if not self.puzzle_sequence:
-            self._prepare_puzzles()
-
-        idx = index % len(self.puzzle_sequence)
-        p = self.puzzle_sequence[idx]
-
-        if isinstance(p, dict):  # new puzzle format
-            self.current_word = p.get("answer")
-            self.scrambled_word = re.sub(r"^Unscramble this word:\s*", "", p.get("question", ""))
-        else:  # old tuple format (backward compatible)
-            self.current_word, self.scrambled_word = p
-
-        self.puzzle_index = index
-
 
     def __str__(self):
         """
@@ -230,67 +220,45 @@ class PuzzleWorld:
         """
         lines = []
         lines.append("=== PuzzleWorld State ===")
-        lines.append(f"Treasure room: {self.treasure}")
-        lines.append(f"Hazard Type 1 rooms: {self.hazards['type1']}")
-        lines.append(f"Hazard Type 2 rooms: {self.hazards['type2']}")
-        lines.append(f"Puzzle Rooms: {self.puzzles}")
+        lines.append(f"Treasure location:       {self.treasure}")
+        lines.append(f"Hazard Type 1 locations: {self.hazards['type1']}")
+        lines.append(f"Hazard Type 2 locations: {self.hazards['type2']}")
+        lines.append(f"Puzzle locations:        {self.puzzles}")
 
         # --- Word puzzle info ---
-        lines.append(f"Current word puzzle index: {self.puzzle_index}")
-        if self.puzzle_sequence:
-            lines.append(f"Scrambled word: {self.scrambled_word}")
-            lines.append(f"Solution word: {self.current_word}")
-        else:
-            lines.append("No word puzzles prepared.")
+        #lines.append(f"Current word puzzle index: {self.puzzle_index}")
+        lines.append("---First word puzzle ----")
+        if self.word_puzzle_sequence:
+            p = self.word_puzzle_sequence[self.word_puzzle_index]
+            lines.append(f"Word puzzle question: {p['question']}")
+            lines.append(f"Word puzzle answer:   {p['answer']}")
+
 
         # --- Number puzzle info ---
-        lines.append(f"Current number puzzle index: {self.number_puzzle_index}")
-        if getattr(self, "number_puzzle_sequence", []):
-            idx = self.number_puzzle_index % len(self.number_puzzle_sequence)
-            p = self.number_puzzle_sequence[idx]
-            lines.append(f"Number puzzle question: {p['question']}")
-            lines.append(f"Number puzzle answer: {p['answer']}")
-        else:
-            lines.append("No number puzzles prepared.")
+        # lines.append(f"Current number puzzle index: {self.number_puzzle_index}")
+        lines.append("---First number puzzle ----")
+        p = self.number_puzzle_sequence[self.number_puzzle_index]
+        lines.append(f"Number puzzle question: {p['question']}")
+        lines.append(f"Number puzzle answer:   {p['answer']}")
+
 
         lines.append("==========================")
         return "\n".join(lines)
 
-    # def generate_new_puzzle(self):
-    #     """Advance to next puzzle in sequence. And return it."""
-    #     self._set_puzzle(self.puzzle_index + 1)
-    #     return self.get_puzzle()
-
-    # def get_puzzle_word(self):
-    #     return self.scrambled_word
-
-    # def get_puzzle_solution(self):
-    #     return self.current_word
-
-
-    # def get_puzzle(self):
-    #     return self.current_word, self.scrambled_word
+    # ---------- Public methods  ----------
 
     def get_next_word_puzzle(self):
-        """Return the next precomputed word puzzle [question, answer]."""
-        # if not self.puzzle_sequence:
-        #     self._prepare_puzzles()
-        p = self.puzzle_sequence[self.puzzle_index % len(self.puzzle_sequence)]
-        self.puzzle_index += 1
+        """Return the next word puzzle as a list [question, answer]."""
+        p = self.word_puzzle_sequence[self.word_puzzle_index]
+        self.word_puzzle_index = (self.word_puzzle_index + 1) % len(self.word_puzzle_sequence)  # keep in range
         return [p["question"], p["answer"]]
 
 
     def get_next_number_puzzle(self):
-        """Return the next precomputed number puzzle [question, answer]."""
-        # if not self.number_puzzle_sequence:
-        #     self._prepare_puzzles()
-        p = self.number_puzzle_sequence[self.number_puzzle_index % len(self.number_puzzle_sequence)]
-        self.number_puzzle_index += 1
+        """Return the next number puzzle as a list [question, answer]."""
+        p = self.number_puzzle_sequence[self.number_puzzle_index]
+        self.number_puzzle_index = (self.number_puzzle_index+1)  % len(self.number_puzzle_sequence)
         return [p["question"], p["answer"]]
-
-
-    # def check_solution(self, guess):
-    #     return guess.lower() == self.current_word.lower()
 
     def get_map_ascii(self):
         """
@@ -357,11 +325,6 @@ class PuzzleWorld:
         DIM = f"{ESC}[90m"
         WHITE = f"{ESC}[97m"
         BLUE_BG = f"{ESC}[44m"
-        RED_BG = f"{ESC}[41m"
-        GREEN_BG = f"{ESC}[42m"
-        YELLOW_BG = f"{ESC}[43m"
-        BLACK = "\x1b[30m"
-        WHITE_BG = "\x1b[47m"
 
         color_map = highlights or {}
 
@@ -377,7 +340,6 @@ class PuzzleWorld:
             return f"{RESET}{WHITE}{bg}{num}{RESET}{DIM}"
             #return f"{num}"
 
-
         for n in range(20, 0, -1):
             styled = re.sub(rf"(?<!\d){n}(?!\d)", style_number, styled)
 
@@ -386,53 +348,131 @@ class PuzzleWorld:
         return styled
 
 
-
     def print_map(self, type="ansi"):
-        """Print the ASCII-art map of all 20 locations."""
+        """
+        Print the map of all 20 locations and connections between them.
+        By default print the ANSI version (some colors and special characters)
+        Args:
+            type (string, optional): use type='ascii' to get plain ASCII version of map
+        """
         if type == "ascii":
             print(self.get_map_ascii())
         else:
             print(self.get_map_ansi())
     
  
-    # ---------- Hazard/Treasure getters ----------
-    def get_adjacent_rooms(self, room):
-        return self.rooms[room]
+    # ---------- Hazard/Treasure/Puzzle getters ----------
+    def get_adjacent_locations(self, location):
+        """Return a list of locations adjacent to the given one"""
+        return self.locations[location]
 
-    def has_hazard1(self, room):
-        return room in self.hazards["type1"]
+    def has_hazard1(self, location):
+        """Return true if given location has a type1 hazard in it. 
+           Equivalent to: 'if location in get_hazard1_locations()' """
+        return location in self.hazards["type1"]
 
-    def has_hazard2(self, room):
-        return room in self.hazards["type2"]
+    def has_hazard2(self, location):
+        """Returns true if given location has a type2 hazard in it. 
+           Equivalent to: 'if location in get_hazard2_locations()' """
+        return location in self.hazards["type2"]
 
-    def is_hazard1_adjacent(self, room):
-        return any(neighbor in self.hazards["type1"] for neighbor in self.rooms[room])
+    def get_hazard1_locations(self):
+        """Return a list of the locations that have hazard type 1"""
+        return self.hazards["type1"]
 
-    def is_hazard2_adjacent(self, room):
-        return any(neighbor in self.hazards["type2"] for neighbor in self.rooms[room])
+    def get_hazard2_locations(self):
+        """Return a list of the locations that have hazard type 2"""
+        return self.hazards['type2']
 
-    def get_treasure_room(self):
+    def get_hazard_locations(self):
+        """Return a dictionary of each hazard type with a list of that hazard's locations"""
+        return self.hazards
+
+    def is_hazard1_adjacent(self, location):
+        """Return True if any connected location has a hazard of type 1."""
+        return any(neighbor in self.hazards["type1"] for neighbor in self.locations[location])
+
+    def is_hazard2_adjacent(self, location):
+        """Return True if any connected location has a hazard of type 2."""
+        return any(neighbor in self.hazards["type2"] for neighbor in self.locations[location])
+
+    def get_treasure_location(self):
+        """Return the location number of the treasure"""
         return self.treasure
 
-    def has_treasure(self, room):
-        return room == self.treasure
+    def has_treasure(self, location):
+        """Return True if given location has the treasure"""
+        return location == self.treasure
 
-    def is_treasure_adjacent(self, room):
-        return self.treasure in self.rooms[room]
+    def is_treasure_adjacent(self, location):
+        """Return True if any connected location has the treasure."""
+        return self.treasure in self.locations[location]
+
+    def has_puzzle(self, location):
+        """Return True if given location has a puzzle"""
+        return location in self.puzzles
+
+    def is_puzzle_adjacent(self, location):
+        """Return True if any connected location has a puzzle."""
+        return any(neighbor in self.hazards["type2"] for neighbor in self.locations[location])
+
+    def get_puzzle_locations(self):
+        """Return a list of locations that have a puzzle"""
+        return self.puzzles
+
+    def get_unoccupied_locations(self):
+        """
+        Return a list of all locations in the world that are not occupied 
+        by a hazard, puzzle, or the treasure.
+        """
+        occupied = set(self.hazards["type1"]) | set(self.hazards["type2"]) | set(self.puzzles) | {self.treasure}
+        return [loc for loc in self.locations if loc not in occupied]
+
+
+    def set_treasure_location(self, location):
+        """
+        Change the location number of the treasure to the given location.
+        Raises a ValueError if the location is occupied by a hazard or puzzle.
+        Suggests using get_unoccupied_locations() to find safe locations.
+        """
+        if (location in self.hazards["type1"] or 
+            location in self.hazards["type2"] or 
+            location in self.puzzles):
+            raise ValueError(
+                f"Location {location} is occupied by a hazard or puzzle. "
+                f"Use get_unoccupied_locations() to find a safe location."
+            )
+        if location not in self.locations:
+            raise ValueError(f"Invalid location number: {location}")
+        
+        self.treasure = location
+        if self.verbose:
+            print(f"Treasure moved to location {location}.")
 
 
 
 if __name__ =="__main__":
 
-    seed = 1042025
+    seed = 1121
     #for i in range(seed, seed+100):
     W = PuzzleWorld(seed, verbose=True)
     print(W)
-    W.print_map()
-    W.print_map("ascii")
+    # W.print_map()
+    # W.print_map("ascii")
 
     for i in range(10):
-        print(W.get_next_number_puzzle())
+        print(W.get_next_word_puzzle())
+
+    W.set_treasure_location(15)
+    print(W)
+    W.set_treasure_location(8)
+    print(W)
+
+    # print(W.get_hazard1_locations())
+    # print(W.get_hazard2_locations())
+    # print(W.get_hazard_locations())
+    # print(W.puzzles)
+
     #print(W.validate_world())
    #  valid_count = 0
    #  map_count = 0
@@ -454,11 +494,11 @@ if __name__ =="__main__":
 
         
 
-    # print("Treasure room:", gw.get_treasure_room())
+    # print("Treasure location:", gw.get_treasure_location())
     # print("Puzzle:", gw.get_puzzle())
     # print("Check guess:", gw.check_solution("lantern"))
     # print("Hazzards", gw.hazards)
-    # print(gw.get_adjacent_rooms(4))
+    # print(gw.get_adjacent_locations(4))
     # print("Puzzles")
     # for i in range(len(gw.puzzle_sequence)):
     #     print(gw.puzzle_sequence[i])

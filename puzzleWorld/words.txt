@@ -38,3 +38,14 @@ turnleft
 anybeepersinbeeperbag
 beeper
 karel
+inheritance
+polymorphism
+sequence
+selection
+branching
+definition
+ifstatement
+urrobot
+robot
+street
+avenue
