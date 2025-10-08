@@ -457,16 +457,17 @@ if __name__ =="__main__":
     #for i in range(seed, seed+100):
     W = PuzzleWorld(seed, verbose=True)
     print(W)
-    # W.print_map()
-    # W.print_map("ascii")
+    W.print_map()
+    W.print_map("ascii")
 
+    print("printing 10 word puzzles")
     for i in range(10):
         print(W.get_next_word_puzzle())
 
-    W.set_treasure_location(15)
-    print(W)
-    W.set_treasure_location(8)
-    print(W)
+    print("printing 10 number puzzles")
+    for i in range(10):
+        print(W.get_next_word_puzzle())
+
 
     # print(W.get_hazard1_locations())
     # print(W.get_hazard2_locations())
