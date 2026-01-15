@@ -265,7 +265,13 @@ class RobotImage:
         self.__translate_x += horiz
         self.__translate_y += vert
         self.__translate(horiz, vert)
-        
+
+    def setVisible(self, visible: bool):
+        # Hide/show all canvas items with this robot's tag
+        #print("tkwindow setVisible")
+        state = "normal" if visible else "hidden"
+        self._canvas.itemconfigure(self.tag, state=state)
+
     def showKarel(self):
         ''' create the graphic object and make it visible'''
         self._canvas.delete(self.tag)

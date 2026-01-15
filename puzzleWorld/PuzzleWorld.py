@@ -285,6 +285,7 @@ class PuzzleWorld:
           \   /            \   /       
            \ /              \ /        
             16---------------20
+        
         """
         return map_str.strip("\n")
 
