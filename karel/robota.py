@@ -253,6 +253,17 @@ class UrRobot(_RobotSkeleton, Observable):
         self.__speedCheck()
         self.__running = False;
         self.__action_count += 1
+
+        # Print state only if invisible
+        if not self.__visible:
+            beeps = self.__beepers
+            beeps_str = "infinity" if beeps == infinity else str(beeps)
+            print(
+                f"Invisible Robot {self.__ID} turned off at ({self.__street}, {self.__avenue}) "
+                f"facing {self.__direction.__name__} with {beeps_str} beeper(s) in bag."
+            )
+
+
         self._perform_action(self.turnOffAction)
 
 

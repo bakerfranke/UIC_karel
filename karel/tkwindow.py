@@ -194,8 +194,25 @@ class RobotImage:
 
         
     def greyOut(self):
+            # Preserve current visibility state
+        prev_state = "normal"
+        try:
+            prev_state = self._canvas.itemcget(self.tag, "state")
+        except Exception:
+            pass
+
         self._outline = "grey"
-        self.show()
+        self.show()  # redraw with grey outline
+
+        # Re-apply prior state (so hidden robots stay hidden)
+        try:
+            self._canvas.itemconfigure(self.tag, state=prev_state)
+        except Exception:
+            pass
+
+        ###################prev code############
+        # self._outline = "grey"
+        # self.show()
        
         
     def move(self, amount):
