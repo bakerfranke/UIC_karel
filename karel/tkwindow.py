@@ -194,8 +194,25 @@ class RobotImage:
 
         
     def greyOut(self):
+            # Preserve current visibility state
+        prev_state = "normal"
+        try:
+            prev_state = self._canvas.itemcget(self.tag, "state")
+        except Exception:
+            pass
+
         self._outline = "grey"
-        self.show()
+        self.show()  # redraw with grey outline
+
+        # Re-apply prior state (so hidden robots stay hidden)
+        try:
+            self._canvas.itemconfigure(self.tag, state=prev_state)
+        except Exception:
+            pass
+
+        ###################prev code############
+        # self._outline = "grey"
+        # self.show()
        
         
     def move(self, amount):
@@ -265,7 +282,13 @@ class RobotImage:
         self.__translate_x += horiz
         self.__translate_y += vert
         self.__translate(horiz, vert)
-        
+
+    def setVisible(self, visible: bool):
+        # Hide/show all canvas items with this robot's tag
+        #print("tkwindow setVisible")
+        state = "normal" if visible else "hidden"
+        self._canvas.itemconfigure(self.tag, state=state)
+
     def showKarel(self):
         ''' create the graphic object and make it visible'''
         self._canvas.delete(self.tag)

@@ -104,6 +104,10 @@ class RobotWorld(RobotWorldBase, Observer) :
         
         elif action == karel.robota.UrRobot.turnOffAction :
             self.__gRobots[robot].greyOut();
+
+        elif action == karel.robota.UrRobot.setVisibleAction:
+            if _window is not None and robot in self.__gRobots:
+                self.__gRobots[robot].setVisible(robotState.visible())
         
         else :
             pass

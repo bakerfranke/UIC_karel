@@ -225,8 +225,11 @@ class UrRobot(_RobotSkeleton, Observable):
         """Perform a robot action, notify observers, and update the window. Leave check if running to action methods"""
         self.setChanged()
         self.notifyObservers(self.RobotState(self, action))
-        if self.__visible:
-            self._update_if_graphics()
+
+        # Force a refresh if we just toggled visibility
+        if action == self.setVisibleAction or  self.__visible: 
+            self._update_if_graphics() 
+        
         self.sleep()
               
     def move(self):
@@ -250,6 +253,17 @@ class UrRobot(_RobotSkeleton, Observable):
         self.__speedCheck()
         self.__running = False;
         self.__action_count += 1
+
+        # Print state only if invisible
+        if not self.__visible:
+            beeps = self.__beepers
+            beeps_str = "infinity" if beeps == infinity else str(beeps)
+            print(
+                f"Invisible Robot {self.__ID} turned off at ({self.__street}, {self.__avenue}) "
+                f"facing {self.__direction.__name__} with {beeps_str} beeper(s) in bag."
+            )
+
+
         self._perform_action(self.turnOffAction)
 
 
@@ -355,6 +369,8 @@ class UrRobot(_RobotSkeleton, Observable):
             self.__running = robot._UrRobot__running
             self.__id = robot._UrRobot__ID
             self.__action = action
+            self.__visible = robot._UrRobot__visible  
+
         def street(self):
             return self.__street
         def avenue(self):
@@ -367,6 +383,10 @@ class UrRobot(_RobotSkeleton, Observable):
             return self.__running
         def action(self):
             return self.__action
+    
+        def visible(self):
+           return self.__visible                      # <-- ADD THIS
+    
         def id(self):
             return self.__id
         
