@@ -75,13 +75,14 @@ class RobotWorld(RobotWorldBase, Observer) :
 #            self.__gRobots[robot].move(_window.drawArea(), _window.delta())
             if _window != None:
                 _window.moveRobot(self.__gRobots[robot])
-            
+
         elif action == karel.robota.UrRobot.createAction :
             self._registerRobot(robot)
             if _window != None:
                 (street, avenue) = (robot._UrRobot__street, robot._UrRobot__avenue)
+                robot_type = getattr(robot, '_UrRobot__robot_type', 'sparky')
                 self.__gRobots[robot] = _window.addRobot(street, avenue, robot._UrRobot__direction,
-                                                     robot._UrRobot__fill, robot._UrRobot__outline)
+                                                     robot._UrRobot__fill, robot._UrRobot__outline, robot_type)
             
         elif action == karel.robota.UrRobot.turnLeftAction :
             if _window != None:
@@ -146,11 +147,21 @@ class RobotWorld(RobotWorldBase, Observer) :
         
     def speedCheck(self):
         pass
-    
+
     def delay(self):
         return self.__delay
 
-    
+    def setRobotType(self, robot_type):
+        """Set the default robot type/icon for all new robots.
+
+        Args:
+            robot_type (str): Name of the robot type (e.g., 'sparky', 'karel', 'dragon')
+                              Images should be named: {robot_type}_north.png, etc.
+        """
+        from karel.tkwindow import RobotImage
+        RobotImage._defaultRobotType = robot_type
+        print(f"Default robot type set to: {robot_type}")
+
 #    _runnables = []
     
 # 
@@ -159,18 +170,18 @@ class RobotWorld(RobotWorldBase, Observer) :
         """
         Place any number of beepers at a corner. Use RobotWorld.infinity to place an infinite number.
         The number will be added to the number currently there. Don't try to reduce the number
-        by giving a negative value. Strange behavior can result since negative values are treated as infinite. 
+        by giving a negative value. Strange behavior can result since negative values are treated as infinite.
         """
         self.__beeperControl.acquire()
         if howMany == 0 :
             return
         legalCorner(street, avenue)
         place = (street, avenue)
-        
+
         if howMany < 0 :
             self._beepers[place] = infinity
             if _window != None:
-                _window.deleteBeeper(place, True)               
+                _window.deleteBeeper(place, True)
                 _window.placeBeepers(street, avenue, infinity)
                 self.__beeperControl.notify()
                 self.__beeperControl.release()
@@ -221,6 +232,8 @@ class RobotWorld(RobotWorldBase, Observer) :
                     _window.deleteBeeper(place)
                     _window.placeBeepers(street, avenue, howMany)
         elif howMany == infinity :
+            self.__beeperControl.notify()
+            self.__beeperControl.release()
             return
         else :
             self.__beeperControl.notify()
