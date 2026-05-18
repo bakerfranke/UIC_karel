@@ -110,9 +110,9 @@ class UrRobot(_RobotSkeleton, Observable):
         6: "Robot Visibility Changed"
     }
     
-    def __init__(self, street, avenue, direction, beepers, fill = 'yellow', outline = 'black', visible=True):
+    def __init__(self, street, avenue, direction, beepers, fill = 'yellow', outline = 'black', visible=True, robot_type=None):
         "Create a robot in a particular situation."
-        
+
         if not UrRobot._graphics_initialized:
             if(DEBUG): print("initializing gaphics")
             UrRobot._initialize_graphics()
@@ -123,13 +123,14 @@ class UrRobot(_RobotSkeleton, Observable):
         self.__avenue = avenue
         self.__direction = direction
         self.__visible = visible
-        
+
         if beepers < 0 :
             beepers = infinity
         self.__beepers = beepers
         self.__ID = _incrementRobotCount()
         self.__fill = fill
         self.__outline = outline
+        self.__robot_type = robot_type
         self.__running = True;
         self.addObserver(world)
 #        world._World__registerRobot(self)
@@ -394,9 +395,9 @@ from karel.sensorpack import _SensorPack
     
 class Robot(UrRobot, _SensorPack) :
     "Adds sensing facilities to robots, but otherwise these behave just like UrRobots."
-    
-    def __init__(self, street, avenue, direction, beepers, fill = 'yellow', outline = 'black'):
-        UrRobot.__init__(self, street, avenue, direction, beepers, fill, outline )
+
+    def __init__(self, street, avenue, direction, beepers, fill = 'yellow', outline = 'black', robot_type=None):
+        UrRobot.__init__(self, street, avenue, direction, beepers, fill, outline, robot_type=robot_type)
         
     def anyBeepersInBeeperBag(self):
         "Return true if there are beepers carried by this robot."

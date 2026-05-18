@@ -6,19 +6,11 @@ from tkinter import mainloop
 from tkinter import Label
 from tkinter import Frame
 from tkinter import Button
-from tkinter import PhotoImage
+#from Tkinter import PhotoImage
 from tkinter import Canvas
 from tkinter import Scale
 from tkinter import IntVar
 from tkinter import Menu
-import os
-
-try:
-    from PIL import Image, ImageTk
-    PIL_AVAILABLE = True
-except ImportError:
-    PIL_AVAILABLE = False
-    print("Warning: PIL not available. Images may appear very large. Install with: pip install Pillow")
 
 from karel.basicdefinitions import North
 from karel.basicdefinitions import East
@@ -43,324 +35,345 @@ _basicSize = 23 #pixel count of robot image bounding box
 
 class RobotImage:
     rNumber = 0
-    _pilImages = {}      # Cache for original PIL images
-    _photoImages = {}    # Cache for converted PhotoImage objects
-    _greyPhotoImages = {}  # Cache for greyscale versions
-    _alphaPhotoImages = {}  # Cache for semi-transparent versions
-    _scaleFactor = 1.0   # Current scale factor for the window
-    _defaultRobotType = 'sparky'  # Default robot type (can be changed via world.setRobotType)
-
-    @classmethod
-    def _loadImages(cls, robot_type="sparky", image_dir="robot_images"):
-        """Load all robot images for a specific robot type"""
-        cache_key = robot_type
-        if cache_key in cls._pilImages:  # Already loaded
-            return
-
-        # Try local folder first (where main program runs)
-        local_images_path = os.path.join(os.getcwd(), image_dir)
-
-        # Fall back to library folder (inside karel module)
-        karel_dir = os.path.dirname(os.path.abspath(__file__))
-        library_images_path = os.path.join(karel_dir, image_dir)
-
-        directions = {
-            North: f"{robot_type}_north.png",
-            East: f"{robot_type}_east.png",
-            South: f"{robot_type}_south.png",
-            West: f"{robot_type}_west.png"
-        }
-
-        # Create nested dict for this robot type
-        cls._pilImages[cache_key] = {}
-        cls._photoImages[cache_key] = {}
-
-        for direction, filename in directions.items():
-            # Try local folder first
-            local_path = os.path.join(local_images_path, filename)
-            # Fall back to library folder
-            library_path = os.path.join(library_images_path, filename)
-
-            path = None
-            if os.path.exists(local_path):
-                path = local_path
-            elif os.path.exists(library_path):
-                path = library_path
-
-            if path:
-                try:
-                    if PIL_AVAILABLE:
-                        cls._pilImages[cache_key][direction] = Image.open(path)
-                        print(f"Loaded {robot_type} image: {path}")
-                    else:
-                        cls._photoImages[cache_key][direction] = PhotoImage(file=path)
-                        print(f"Loaded {robot_type} image (unscaled): {path}")
-                except Exception as e:
-                    print(f"Error loading {filename} from {path}: {e}")
-            else:
-                print(f"Warning: Could not find {filename} for robot type '{robot_type}' in local or library folders")
-
-    @classmethod
-    def _getResizedImage(cls, robot_type, direction, size, greyscale=False, alpha=None):
-        """Get a resized PhotoImage for the given robot, direction and size
-
-        Args:
-            alpha: Optional alpha transparency value (0-255). If provided, creates a semi-transparent image.
-        """
-        if not PIL_AVAILABLE:
-            return cls._photoImages.get(robot_type, {}).get(direction)
-
-        # Choose cache based on flags - use a combined cache for both greyscale and alpha
-        if greyscale and alpha is not None:
-            cache_dict = cls._alphaPhotoImages  # Use alpha cache for combined effect
-        elif greyscale:
-            cache_dict = cls._greyPhotoImages
-        elif alpha is not None:
-            cache_dict = cls._alphaPhotoImages
-        else:
-            cache_dict = cls._photoImages
-
-        # Create cache key that includes both flags
-        cache_key = (robot_type, direction, size, greyscale, alpha)
-
-        if cache_key not in cache_dict:
-            # Resize the PIL image
-            pil_img = cls._pilImages.get(robot_type, {}).get(direction)
-            if pil_img is None:
-                return None
-            resized = pil_img.resize((size, size), Image.Resampling.LANCZOS)
-
-            # Convert to RGBA first to preserve/create alpha channel
-            if resized.mode != 'RGBA':
-                resized = resized.convert('RGBA')
-
-            # Save the original alpha channel
-            original_alpha = resized.split()[3]
-
-            # Convert to greyscale if requested
-            if greyscale:
-                from PIL import ImageOps
-                resized = ImageOps.grayscale(resized)
-                resized = resized.convert('RGBA')
-                resized.putalpha(original_alpha)
-
-            # Apply alpha transparency if requested
-            if alpha is not None:
-                alpha_channel = resized.split()[3]
-                alpha_channel = alpha_channel.point(lambda x: int(x * alpha / 255))
-                resized.putalpha(alpha_channel)
-
-            # Convert to PhotoImage
-            cache_dict[cache_key] = ImageTk.PhotoImage(resized)
-
-        return cache_dict.get(cache_key)
-
-    def __init__(self, street, avenue, direction, window, fill='blue', outline='black', robot_type=None):
+    def __init__(self, street, avenue, direction, window, fill='blue', outline='black'):
         self._canvas = window._canvas
         self._street = street
         self._avenue = avenue
         self.scaleFactor = window._KarelWindow__scaleFactor
         self._scaler = window._scaleToPixels
         self.__scaleFactor = window._KarelWindow__scaleFactor
+#        self.__configControl = window._KarelWindow__configControl
         self._place = self._scaler(street, avenue)
+        self.karelPackage = {"size":23, "draw":self.showKarel, "figure":RobotImage.karelRobot}
+        self.alienPackage = {"size":23, "draw":self.showAlien, "figure":RobotImage.alienRobot}
+        self.crabPackage = {"size":23, "draw":self.showAlien, "figure":RobotImage.crabRobot}
 
+        # the next statement defines which figure will be drawn
+        #package = self.karelPackage
+        package = self.alienPackage
+        
+        self._basicSize = package["size"]   # the size of the bounding box of the figure
+        self.show = package["draw"]         # the drawing method
+        self.__north = package["figure"]    # the list of component listss
+
+        self.__setup()  # compute rotations
+        self.__imageChooser = {North: self.__north, East: self.__east, South: self.__south, West: self.__west}
+        # maps karel directions to the image maps. 
+        
         self._direction = direction
-        # Use provided robot_type or fall back to class default
-        self._robot_type = robot_type if robot_type else RobotImage._defaultRobotType
         if fill == None:
             fill = "yellow"
         self._fill = fill
         self._outline = outline
         self.tag = "r"+str(RobotImage.rNumber)
         RobotImage.rNumber += 1
-
-        # Load images for this robot type (use converted value with default)
-        RobotImage._loadImages(self._robot_type)
-
-        self._x = 0
-        self._y = 0
-        self._isGreyed = False  # Track greyed-out state
-        self._isTransparent = False  # Track if robot should be semi-transparent (for visibility over beepers)
         self.__buildImage()
         
-
+        
     def deleteAll(self):
         self._canvas.delete(self.tag)
+        
+    # A robot image is defined by a list of lists keyed to a drawing (show) method
+    # The drawing method knows how to render each element of the list
+    # The pixels named (in the tuples) are within a bounding box of a certain size that
+    #  can vary. It is listed as part of the drawing "package" for this figure. This one is in 
+    # a square 23 pixels on a side. The simpler ones are in a 6 pixel box. This is needed for scaling.     
+    karelRobot = [ # use _basicSize = 23
+            [   
+                (-6,-10), #poly grey head
+#                (0, -8),
+                (6,-10),
+                (6,-3),
+                (-6,-3)
+            ],
+            [
+                (-4,-3), #poly fill color body
+                (4,-3),
+                (4, -2),
+                (6, -2),
+                (6,8),
+                (-6,8),
+                (-6, -2),
+                (-4, -2)
+            ],
+            [
+                (-6,8), #poly red foot
+                (-2,8),
+                (-2,11),
+                (-6,11)
+            ],
+            [
+                (2,8), #poly red
+                (6,8),
+                (6,11),
+                (2,11)
+            ],
+            [
+                (-8,-1), #poly green arm
+                (-6,-1),
+                (-6,6),
+                (-8,6)
+            ],
+            [
+                (8,-1), #poly green
+                (6,-1),
+                (6,6),
+                (8,6)
+            ],
+            [ (-3, -7), (-1, -5)], #oval eye blue
+             
+            [ (1, -7), (3, -5)], #oval eye blue
+            [(-2, -1), (-2, 7)], # K in black
+            [(-2, 3), (3, -1)],
+            [(-2, 3), (3, 7)]
+    ]
+    
+    alienRobot = [ # use _basicSize = 6
+          [
+              (0, -1), # pixel polsitions in a (0,0) centered square of size _basicSize
+              (0, 1), # the first list here is the basic outline - polygon
+              (-3, 3), 
+              (0, 1),
+              (3, 3),
+              (0, 1),
+              (0, -1),
+              (2, -1),
+              (2, -2),
+              (0, -3),
+              (-2, -2),
+              (-2, -1)
+            ],
+            [(-1, -2), (0, -1)], #left eye - circle
+            [(0, -2), (1, -1)] #right eye - circle                
+    ]
+    
+    crabRobot = [ # use _basicSize = 6
+             [
+                (0,-3), #Alternate robot image
+                (-3,-1),
+                (-2,-1),
+                (-2,0),
+                (-3,0),
+                (-1,3),
+                (-1,0),
+                (1,0),
+                (1,3),
+                (3,0),
+                (2,0),
+                (2,-1),
+                (3,-1)
+             ],
+             [(-1, -2), (0, -1)], #left eye - circle
+             [(0, -2), (1, -1)] #right eye - circle                               
+    ]
+                  
+    def __setup(self): 
+        ''' Define the robot rotations from the basic north facing version'''
+        result = []
+        for list in self.__north :
+            item = []       
+            for (x,y) in list :
+                item.append((y, -x))
+            result.append(item)     
+        self.__west = result
+        
+        result = []
+        for list in self.__west :
+            item = []
+            for (x,y) in list :
+                item.append((y, -x))
+            result.append(item)
+        self.__south = result
+        
+        result = []
+        for list in self.__south :
+            item = []
+            for (x,y) in list :
+                item.append((y, -x))
+            result.append(item)
+        self.__east = result
 
         
     def greyOut(self):
-        """Dim the robot when it turns off - make it greyscale and semi-transparent"""
-        self._isGreyed = True
-        self._isTransparent = True  # Also make semi-transparent
-        # Delete the current image on canvas
-        if self._canvas:
-            self._canvas.delete(self.tag)
-        # Redraw with greyscale and transparency
-        self.__buildImage()
-
-    def setTransparent(self, transparent):
-        """Make the robot semi-transparent to show beepers beneath it"""
-        self._isTransparent = transparent
-        # Delete the current image on canvas
-        if self._canvas:
-            self._canvas.delete(self.tag)
-        # Redraw with appropriate transparency
-        self.__buildImage()
-
-    def move(self, amount):
-        """Move robot forward in current direction"""
-        (dx, dy) = _moveParameters[self._direction]
-        self._street -= dy
-        self._avenue += dx
-
-        # Calculate new position
-        (new_x, new_y) = self._scaler(self._street, self._avenue)
-
-        # Move the image on canvas
-        if self._canvas:
-            self._canvas.move(self.tag, new_x - self._x, new_y - self._y)
-            self._x = new_x
-            self._y = new_y
-
-    def rotate(self):
-        """Turn left (change direction and redraw image)"""
-        # Delete current image
-        if self._canvas:
-            self._canvas.delete(self.tag)
-
-        # Update direction
-        self._direction = _nextDirection[self._direction]
-
-        # Redraw with new direction
-        self.__buildImage()
-
-    def scale(self, mult):
-        """Placeholder for compatibility"""
-        pass
-
-    def translate(self, horiz, vert):
-        """Placeholder for compatibility"""
-        pass
-
-    def setVisible(self, visible: bool):
-        """Hide/show robot"""
-        state = "normal" if visible else "hidden"
+            # Preserve current visibility state
+        prev_state = "normal"
         try:
-            self._canvas.itemconfigure(self.tag, state=state)
-        except:
+            prev_state = self._canvas.itemcget(self.tag, "state")
+        except Exception:
             pass
 
-    def moveScale(self, newScaleFactor):
-        """Handle window resize by redrawing at new position"""
-        if self._canvas:
+        self._outline = "grey"
+        self.show()  # redraw with grey outline
+
+        # Re-apply prior state (so hidden robots stay hidden)
+        try:
+            self._canvas.itemconfigure(self.tag, state=prev_state)
+        except Exception:
+            pass
+
+        ###################prev code############
+        # self._outline = "grey"
+        # self.show()
+       
+        
+    def move(self, amount):
+        ''' Moves a robot by an arbitrary amount in pixels, not streets, but in forward direction'''        
+#        self.__configControl.acquire()
+        (dx,dy) = _moveParameters[self._direction]
+        self._street -= dy
+        self._avenue += dx
+        self.translate(amount*dx, amount*dy)
+        if self._canvas != None :
+            self._canvas.move(self.tag, amount*dx, amount*dy)
+#        self.__configControl.notify()
+#        self.__configControl.release()
+            
+    def _dumpImage(self):
+        print ("[")
+        for alist in self.image :
+            print ('  [')
+            for (x,y) in alist :
+                print ('  (' + str(x) +', ' + str(y) + '),' )
+            print ('  ]')
+        print ("]")
+        
+    def rotate(self):
+        ''' image turns left'''
+        if self._canvas != None :
             self._canvas.delete(self.tag)
+        result = []
+#        print (str(self._direction))
+#        print (str(self.__imageChooser[self._direction]))
+        for list in self.__imageChooser[self._direction] :
+            item = []
+            for (x,y) in list :
+                item.append((y*self.__scale, -x*self.__scale)) #rotate AND scale
+            result.append(item)
+        self.image = result
+        
+        self._direction = _nextDirection[self._direction] #(self._direction + 1) % 4
+
+        self.__translate(self.__translate_x, self.__translate_y)
+        if self._canvas != None :
+            self.show()
+                
+    def scale(self, mult):
+        ''' scale the image up from the basic 6 (or 23...) pixel version'''
+        self.__scale = mult
+        result = []
+        for list in self.__imageChooser[self._direction] :
+            item = []
+            for (x,y) in list :
+                item.append((x*mult, y*mult))
+            result.append(item)
+        self.image = result
+                    
+    def __translate(self, horiz, vert):
+        ''' move a robot an aribitrary amount and direction'''
+        result = []
+        for list in self.image :
+            item = []
+            for (x,y) in list :
+                item.append((x + horiz, y + vert))
+            result.append(item)
+        self.image = result        
+        
+    def translate(self, horiz, vert):
+        ''' remember a translateion and perform it'''
+        self.__translate_x += horiz
+        self.__translate_y += vert
+        self.__translate(horiz, vert)
+
+    def setVisible(self, visible: bool):
+        # Hide/show all canvas items with this robot's tag
+        #print("tkwindow setVisible")
+        state = "normal" if visible else "hidden"
+        self._canvas.itemconfigure(self.tag, state=state)
+
+    def showKarel(self):
+        ''' create the graphic object and make it visible'''
+        self._canvas.delete(self.tag)
+        result = self._canvas.create_polygon( self.image[0], # head
+                              outline = self._outline,
+                              fill = "grey",
+                              width=2,
+                              smooth = True,
+                              tags = self.tag
+                              )
+        result = self._canvas.create_polygon( self.image[1], # body
+                              outline = self._outline,
+                              fill = self._fill,
+                              width=2,
+                              smooth = False,
+                              tags = self.tag
+                              )
+        for i in range(2, 4): # two feet
+            result1 = self._canvas.create_polygon( self.image[i],
+                              outline = self._outline,
+                              fill = "red",
+                              width=2,
+                              smooth = True,
+                              tags = self.tag
+                              )
+#        result1 = self._canvas.create_polygon( self.image[3],
+#                              outline = self._outline,
+#                              fill = "red",
+#                              width=2,
+#                              smooth = True,
+#                              tags = self.tag
+#                              )
+        for i in range(4, 6) : # two arms
+            result1 = self._canvas.create_polygon( self.image[i],
+                              outline = self._outline,
+                              fill = "green",
+                              width=2,
+                              smooth = False,
+                              tags = self.tag
+                             )
+#        result1 = self._canvas.create_polygon( self.image[5],
+#                              outline = self._outline,
+#                              fill = "green",
+#                              width=2,
+#                              smooth = False,
+#                              tags = self.tag
+#                              )
+        for i in range(6, 8): # two eyes
+            result1 = self._canvas.create_rectangle(self.image[i], fill = "blue", width = 2, outline = self._outline, tags = self.tag) #left eye
+        for i in range(8, 11) : # letter k (three lines)
+            result1 = self._canvas.create_line(self.image[i], width = 2, fill = self._outline, tags = self.tag)
+        return result
+    
+    def showAlien(self): # works for crabRobot also
+        ''' create the graphic object and make it visible'''
+        self._canvas.delete(self.tag)
+
+        result = self._canvas.create_polygon( self.image[0],
+                              outline = self._outline,
+                              fill = self._fill,
+                              smooth = 1,
+#                              stipple = self._stipple,
+                              splinesteps = 10,
+                              width = 2, tags = self.tag)
+        color = "green"
+        if self._fill == "green" :
+            color = "magenta"
+        result1 = self._canvas.create_oval(self.image[1], fill = color, tags = self.tag) #left eye
+        result1 = self._canvas.create_oval(self.image[2], fill = color, tags = self.tag) # right eye
+        return result
+    
+    def moveScale(self, newScaleFactor): # used to move the object after the size of world is changed
+        self._canvas.delete(self.tag)
         self.__scaleFactor = newScaleFactor
+        self.image = self.__imageChooser[self._direction]
         self.__buildImage()
 
     def __buildImage(self):
-        """Build the robot image at current position and direction"""
-        (x, y) = self._scaler(self._street, self._avenue)
-
-        # Calculate appropriate image size (65% of grid square)
-        image_size = max(10, int(self.__scaleFactor * 0.75))
-
-        # Get the resized image for current direction, with greyscale if needed
-        # Use semi-transparent (150/255 alpha ≈ 59%) if transparent flag is set
-        alpha = 150 if self._isTransparent else None
-        if PIL_AVAILABLE:
-            image = RobotImage._getResizedImage(self._robot_type, self._direction, image_size, greyscale=self._isGreyed, alpha=alpha)
-        else:
-            image = RobotImage._photoImages.get(self._robot_type, {}).get(self._direction)
-
-        if image:
-            self._canvas.create_image(x, y, image=image, tag=self.tag)
-        else:
-            # Fallback: draw a chevron/arrow pointing in the robot's direction
-            size = image_size // 2.5
-            point_offset = int(size * 0.6)  # How much the point sticks out beyond the edge
-            indent = int(size * 0.3)  # How much the left side indents
-
-            # Visual centering adjustments - tweak these to center chevron visually on the grid
-            # (negative values = up/left, positive values = down/right)
-            adjust_x = 0
-            adjust_y = 0
-            if self._direction == North:
-                adjust_y = 0  # nudge up/down for North-pointing chevron
-            elif self._direction == East:
-                adjust_x = 0  # nudge left/right for East-pointing chevron
-            elif self._direction == South:
-                adjust_y = 0  # nudge up/down for South-pointing chevron
-            else:  # West
-                adjust_x = 0  # nudge left/right for West-pointing chevron
-
-            # Apply adjustments to center position
-            cx = x + adjust_x
-            cy = y + adjust_y
-
-            # Create chevron points based on direction
-            if self._direction == North:
-                # Point up
-                points = [
-                    cx + size, cy - size,              # top-right
-                    cx + size, cy + size,              # bottom-right
-                    cx, cy + indent,     # bottom indent
-                    cx - size, cy + size,              # bottom-left
-                    cx - size, cy - size,              # top-left
-                    cx, cy - size - point_offset              # top point
-                ]
-            elif self._direction == East:
-                # Point right
-                points = [
-                    cx - size, cy - size,              # top-left
-                    cx + size, cy - size,              # top-right
-                    cx + size + point_offset, cy,     # right point
-                    cx + size, cy + size,              # bottom-right
-                    cx - size, cy + size,              # bottom-left
-                    cx - indent, cy                    # left indent
-                ]
-            elif self._direction == South:
-                # Point down
-                points = [
-                    cx - size, cy - size,              # top-left
-                    cx, cy - indent,                     # top-indent
-                    cx + size, cy - size,              # top-right
-                    cx + size, cy + size,              # bottom-right
-                    cx, cy + size + point_offset,     # bottom point
-                    cx - size, cy + size              # bottom-left
-
-                ]
-            else:  # West
-                # Point left
-                points = [
-                    cx + size, cy - size,              # top-right
-                    cx - size, cy - size,              # top-left
-                    cx - size - point_offset, cy,     # left point
-                    cx - size, cy + size,              # bottom-left
-                    cx + size, cy + size,              # bottom-right
-                    cx + indent, cy                    # right indent
-                ]
-
-            # Determine colors based on state
-            if self._isGreyed:
-                chevron_fill = 'grey'
-                chevron_outline = 'darkgrey'
-            elif self._isTransparent:
-                # Use lighter color for transparency effect
-                chevron_fill = 'lightgrey'
-                chevron_outline = 'grey'
-            else:
-                chevron_fill = self._fill
-                chevron_outline = self._outline
-
-            self._canvas.create_polygon(
-                points,
-                fill=chevron_fill, outline=chevron_outline,
-                width=2,
-                tag=self.tag
-            )
-
-        self._x = x
-        self._y = y
+        self.__translate_x = 0
+        self.__translate_y = 0
+        self.scale(self.__scaleFactor/(_basicSize*1.0))
+        (x,y) = self._scaler(self._street, self._avenue)
+        self.translate(x, y)
+        self.show()
          
 
 class KarelWindow(Frame):
@@ -410,12 +423,16 @@ class KarelWindow(Frame):
         #|   0   |  1   |   2   |   3   |   4   |
         #|EMPTY  | BUT  |  LBL  | SLID  |EMPTY  |
 
-        if callback != None : # this makes the speed slider work.
+        if callback != None : # this makes the speed slider work. 
+
+            # Add Play/Pause button
+            #self.play_pause_btn = Button(text="Play", command=self.toggle_play_pause)
+            #self.play_pause_btn.grid(row=0, column=1, sticky="w")
 
             from tkinter import IntVar
             self.iv = IntVar()
             self.iv.trace('r', callback)
-
+        
             self.scale = Scale(orient = "horizontal", variable = self.iv)
             self.scale.set(20)
             self.scale.grid(row=0, column=2, sticky="ew")
@@ -628,9 +645,9 @@ class KarelWindow(Frame):
 
 
     
-    def addRobot(self, street, avenue, direction, fill, outline, robot_type=None):
+    def addRobot(self, street, avenue, direction, fill, outline):
         #        fill and outline are colors, default to blue, black
-        robot = RobotImage(street, avenue, direction, self, fill, outline, robot_type)
+        robot = RobotImage(street, avenue, direction, self, fill, outline)
         self.__contents.append(robot)
         return robot # the world matches these with the actual robot objects in the model. 
     
