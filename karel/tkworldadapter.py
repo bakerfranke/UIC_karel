@@ -67,26 +67,30 @@ class RobotWorld(RobotWorldBase, Observer) :
         self.trace_enabled = enabled
 
     def startPaused(self, paused: bool = True, delay_ms: int = 0):
-        """Configure startup behavior.
+        """Configure whether the program starts paused (must click Run) or running immediately.
+
+        Programs start running immediately by default - no call needed for that.
+        Call this to opt into starting paused instead (e.g. for a step-by-step demo).
+
+        Must be called after the window exists (i.e. after world.setSize() or
+        world.readWorld()), since it configures that window.
 
         Args:
             paused: If True, start in paused mode (show "Run" button).
                     If False, start running immediately (show "Pause" button).
             delay_ms: Milliseconds to delay before starting (only used if paused=False)
 
-        Default: starts paused (must click Run to start).
         Examples:
-            world.startPaused(True)   # Start paused (default)
-            world.startPaused(False)  # Start running immediately
+            world.startPaused()       # Start paused - same as startPaused(True)
+            world.startPaused(True)   # Start paused
+            world.startPaused(False)  # Start running immediately (the overall default)
         """
         global _window
         if _window is not None:
             _window.is_paused = paused
-            if not paused:
-                # Starting in play mode
-                _window.play_pause_btn.config(text="Pause")
-                if delay_ms > 0:
-                    _window._startup_delay = delay_ms
+            _window.play_pause_btn.config(text="▶ Run" if paused else "⏸ Pause")
+            if not paused and delay_ms > 0:
+                _window._startup_delay = delay_ms
 
     def update(self, robot, robotState = None):
         "This is called whenever any robot changes state since the world observes all robots"

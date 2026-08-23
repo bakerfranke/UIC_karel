@@ -383,7 +383,7 @@ class KarelWindow(Frame):
         self.__right = _windowRight - _inset #770
         self.__scaleFactor = (self.__bottom - self.__top)*1.0/streets
 
-        self.is_paused = True  # Start in pause mode (must click Run to start)
+        self.is_paused = False  # Start running by default (matches pre-pause/step behavior); call world.startPaused(True) to start paused instead
         self.allow_one_step = False  # Flag for stepping one action at a time
         self._startup_delay = 0  # No startup delay by default (user can set via startPaused)
         self._first_action = True  # Track if this is the first robot action
@@ -425,10 +425,10 @@ class KarelWindow(Frame):
             self.scale.grid(row=0, column=2, sticky="ew")
 
             # Add Run/Pause button
-            # Start with "Run" text since we start in pause mode
+            # Label reflects the actual starting state (running by default, or paused if world.startPaused(True) was called)
             self.play_pause_btn = Button(
                 self,
-                text="▶ Run",
+                text="▶ Run" if self.is_paused else "⏸ Pause",
                 command=self.toggle_play_pause,
                 width=10,
                 font=("Arial", 12, "bold")
