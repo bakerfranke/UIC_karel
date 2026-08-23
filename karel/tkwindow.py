@@ -411,14 +411,14 @@ class KarelWindow(Frame):
         root.columnconfigure(0, weight=1)
         root.rowconfigure(0, weight=1)
         self.grid(sticky="news")
-        self.columnconfigure(4, weight=1)
+        self.columnconfigure(2, weight=1)  # empty spacer column - absorbs resize growth, keeping Speed anchored at the right edge
         self.rowconfigure(1, weight=1)
 
         speedLabel = Label(self, text = "Speed")
-        speedLabel.grid(row=0, column=2, sticky="es") #added params from chatgpt
+        speedLabel.grid(row=0, column=3, sticky="es") #added params from chatgpt
 
-        #|   0   |  1   |   2   |   3   |   4   |
-        #|  RUN  | STEP |  LBL  | SLID  |EMPTY  |
+        #|   0   |  1   |   2    |   3   |   4   |
+        #|  RUN  | STEP | EMPTY  |  LBL  | SLID  |
 
         if callback != None : # this makes the speed slider work.
 
@@ -426,9 +426,9 @@ class KarelWindow(Frame):
             self.iv = IntVar()
             self.iv.trace('r', callback)
 
-            self.scale = Scale(self, orient = "horizontal", variable = self.iv)
+            self.scale = Scale(self, orient = "horizontal", variable = self.iv, length=160)
             self.scale.set(20)
-            self.scale.grid(row=0, column=3, sticky="ew")
+            self.scale.grid(row=0, column=4, sticky="e", padx=5)
 
             # Add Run/Pause button
             # Label reflects the actual starting state (running by default, or paused if world.startPaused(True) was called)
