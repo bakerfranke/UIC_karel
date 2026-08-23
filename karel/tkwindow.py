@@ -412,15 +412,15 @@ class KarelWindow(Frame):
         root.rowconfigure(0, weight=1)
         self.grid(sticky="news")
         # Equal-weight spacer columns on both sides of Speed keep it centered as the window resizes.
-        self.columnconfigure(2, weight=1)
-        self.columnconfigure(5, weight=1)
+        self.columnconfigure(3, weight=1)
+        self.columnconfigure(6, weight=1)
         self.rowconfigure(1, weight=1)
 
         speedLabel = Label(self, text = "Speed")
-        speedLabel.grid(row=0, column=3, sticky="es") #added params from chatgpt
+        speedLabel.grid(row=0, column=4, sticky="es") #added params from chatgpt
 
-        #|   0   |  1   |   2    |   3   |   4   |   5    |
-        #|  RUN  | STEP | EMPTY  |  LBL  | SLID  | EMPTY  |
+        #|   0   |  1   |    2     |   3    |   4   |   5   |   6    |
+        #|  RUN  | STEP | RESTART  | EMPTY  |  LBL  | SLID  | EMPTY  |
 
         if callback != None : # this makes the speed slider work.
 
@@ -430,7 +430,7 @@ class KarelWindow(Frame):
 
             self.scale = Scale(self, orient = "horizontal", variable = self.iv, length=160)
             self.scale.set(20)
-            self.scale.grid(row=0, column=4, sticky="e", padx=5)
+            self.scale.grid(row=0, column=5, sticky="e", padx=5)
 
             # Add Run/Pause button
             # Label reflects the actual starting state (running by default, or paused if world.startPaused(True) was called)
@@ -453,10 +453,21 @@ class KarelWindow(Frame):
             )
             self.step_btn.grid(row=0, column=1, sticky="ew", padx=5, pady=3)
 
+            # Add Restart button - re-runs the program from the top in a fresh process,
+            # so a student doesn't have to tab away to their editor and hit Run again.
+            self.restart_btn = Button(
+                self,
+                text="↻ Restart",
+                command=self.restart_program,
+                width=10,
+                font=("Arial", 11, "bold")
+            )
+            self.restart_btn.grid(row=0, column=2, sticky="ew", padx=5, pady=3)
+
 
         #BEF TODO: make the canvas and window scaled to the actual number of streets and avenues?
         self._canvas = Canvas(self, height = _windowBottom, width = _windowRight, bg = 'white')
-        self._canvas.grid(row=1, column=0, columnspan=6, sticky="news")
+        self._canvas.grid(row=1, column=0, columnspan=7, sticky="news")
         self.setSize(streets, avenues)
         self.placeBeeper = self.placeBeepers
 
@@ -488,6 +499,12 @@ class KarelWindow(Frame):
         # Note: Do NOT change is_paused - keep it True
         # The allow_one_step flag will allow the next action to execute
         # Then is_paused will catch and pause again for subsequent actions
+
+    def restart_program(self):
+        """Re-run the current program from the top in a fresh process - same as closing
+        this window and hitting Run again, just without leaving the graphics window."""
+        import sys
+        os.execv(sys.executable, [sys.executable] + sys.argv)
 
 
     #BEF NOTE: fix this so that we can have different streets and avenues.
