@@ -102,7 +102,7 @@ class RobotWorld(RobotWorldBase, Observer) :
             self._registerRobot(robot)
             if _window != None:
                 (street, avenue) = (robot._UrRobot__street, robot._UrRobot__avenue)
-                robot_type = getattr(robot, '_UrRobot__robot_type', 'sparky')
+                robot_type = getattr(robot, '_UrRobot__robot_type', 'karel')
                 self.__gRobots[robot] = _window.addRobot(street, avenue, robot._UrRobot__direction,
                                                      robot._UrRobot__fill, robot._UrRobot__outline, robot_type)
             

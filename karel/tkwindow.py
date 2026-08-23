@@ -48,10 +48,10 @@ class RobotImage:
     _greyPhotoImages = {}  # Cache for greyscale versions
     _alphaPhotoImages = {}  # Cache for semi-transparent versions
     _scaleFactor = 1.0   # Current scale factor for the window
-    _defaultRobotType = 'sparky'  # Default robot type (can be changed via world.setRobotType)
+    _defaultRobotType = 'karel'  # Default robot type (can be changed via world.setRobotType)
 
     @classmethod
-    def _loadImages(cls, robot_type="sparky", image_dir="robot_images"):
+    def _loadImages(cls, robot_type="karel", image_dir="robot_images"):
         """Load all robot images for a specific robot type"""
         cache_key = robot_type
         if cache_key in cls._pilImages:  # Already loaded
