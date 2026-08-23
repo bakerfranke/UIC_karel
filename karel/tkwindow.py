@@ -559,7 +559,7 @@ class KarelWindow(Frame):
 
             
         def place(self):
-            sizeFactor = .5 #Change this to change beeper size. The others scale from it. 
+            sizeFactor = .6 #Change this to change beeper size. The others scale from it.
             placeFactor = .5 * sizeFactor
             val = str(self._number)
             if self._number < 0 :
