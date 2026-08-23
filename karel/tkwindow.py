@@ -396,6 +396,7 @@ class KarelWindow(Frame):
         self._startup_delay = 0  # No startup delay by default (user can set via startPaused)
         self._first_action = True  # Track if this is the first robot action
         self._program_finished = False  # Track if robot has turned off
+        self._pauseOverlayRect = None  # Draggable "Paused" banner, created on demand
 
         bar = Menu()        
         def endProgram(menu): exit()
@@ -496,10 +497,54 @@ class KarelWindow(Frame):
             # Resume execution (Run -> Pause)
             self.is_paused = False
             self.play_pause_btn.config(text="⏸ Pause")
+            self.hidePausedOverlay()
         else:
             # Pause execution (Pause -> Run)
             self.is_paused = True
             self.play_pause_btn.config(text="▶ Run")
+            self.showPausedOverlay()
+
+    def showPausedOverlay(self):
+        """Show a draggable, semi-transparent 'Paused' banner over the middle of the grid."""
+        if getattr(self, '_pauseOverlayRect', None) is not None:
+            return  # already showing
+
+        w = self._canvas.winfo_width()
+        h = self._canvas.winfo_height()
+        if w < 20 or h < 20:  # canvas not mapped/sized yet - fall back to the design size
+            w, h = _windowRight, _windowBottom
+
+        boxWidth, boxHeight = 180, 70
+        x0, y0 = (w - boxWidth) / 2, (h - boxHeight) / 2
+        x1, y1 = x0 + boxWidth, y0 + boxHeight
+
+        self._pauseOverlayRect = self._canvas.create_rectangle(
+            x0, y0, x1, y1, fill='grey', stipple='gray50', outline='black', width=2,
+            tags=('pauseOverlay',)
+        )
+        self._pauseOverlayText = self._canvas.create_text(
+            (x0 + x1) / 2, (y0 + y1) / 2, text='⏸ Paused', font=('Arial', 16, 'bold'),
+            fill='black', tags=('pauseOverlay',)
+        )
+        self._canvas.tag_raise('pauseOverlay')
+        self._canvas.tag_bind('pauseOverlay', '<ButtonPress-1>', self._startDragPausedOverlay)
+        self._canvas.tag_bind('pauseOverlay', '<B1-Motion>', self._dragPausedOverlay)
+
+    def hidePausedOverlay(self):
+        if getattr(self, '_pauseOverlayRect', None) is None:
+            return
+        self._canvas.delete('pauseOverlay')
+        self._pauseOverlayRect = None
+        self._pauseOverlayText = None
+
+    def _startDragPausedOverlay(self, event):
+        self._pauseOverlayDragOrigin = (event.x, event.y)
+
+    def _dragPausedOverlay(self, event):
+        dx = event.x - self._pauseOverlayDragOrigin[0]
+        dy = event.y - self._pauseOverlayDragOrigin[1]
+        self._canvas.move('pauseOverlay', dx, dy)
+        self._pauseOverlayDragOrigin = (event.x, event.y)
 
     def step_once(self):
         """Allow one robot action to execute, then pause again."""

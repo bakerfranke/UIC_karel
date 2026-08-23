@@ -109,6 +109,10 @@ class RobotWorld(RobotWorldBase, Observer) :
         if _window is not None:
             _window.is_paused = paused
             _window.play_pause_btn.config(text="▶ Run" if paused else "⏸ Pause")
+            if paused:
+                _window.showPausedOverlay()
+            else:
+                _window.hidePausedOverlay()
             if not paused and delay_ms > 0:
                 _window._startup_delay = delay_ms
 
