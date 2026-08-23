@@ -65,7 +65,7 @@ if __name__ == "__main__":
 
     world.readWorld("hurdle4.kwld")
     world.setDelay(10)
-    #world.setRobotType("dog") # use a custom robot image
+    #world.setRobotCostume("dog") # use a custom robot image
 
     hurley = HurdleRacer(1,1,East,0)
     hurley.runRace()

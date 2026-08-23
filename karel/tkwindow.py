@@ -48,12 +48,12 @@ class RobotImage:
     _greyPhotoImages = {}  # Cache for greyscale versions
     _alphaPhotoImages = {}  # Cache for semi-transparent versions
     _scaleFactor = 1.0   # Current scale factor for the window
-    _defaultRobotType = 'karel'  # Default robot type (can be changed via world.setRobotType)
+    _defaultCostume = 'karel'  # Default costume (can be changed via world.setRobotCostume)
 
     @classmethod
-    def _loadImages(cls, robot_type="karel", image_dir="robot_images"):
-        """Load all robot images for a specific robot type"""
-        cache_key = robot_type
+    def _loadImages(cls, costume="karel", image_dir="robot_images"):
+        """Load all robot images for a specific costume"""
+        cache_key = costume
         if cache_key in cls._pilImages:  # Already loaded
             return
 
@@ -65,13 +65,13 @@ class RobotImage:
         library_images_path = os.path.join(karel_dir, image_dir)
 
         directions = {
-            North: f"{robot_type}_north.png",
-            East: f"{robot_type}_east.png",
-            South: f"{robot_type}_south.png",
-            West: f"{robot_type}_west.png"
+            North: f"{costume}_north.png",
+            East: f"{costume}_east.png",
+            South: f"{costume}_south.png",
+            West: f"{costume}_west.png"
         }
 
-        # Create nested dict for this robot type
+        # Create nested dict for this costume
         cls._pilImages[cache_key] = {}
         cls._photoImages[cache_key] = {}
 
@@ -91,24 +91,24 @@ class RobotImage:
                 try:
                     if PIL_AVAILABLE:
                         cls._pilImages[cache_key][direction] = Image.open(path)
-                        print(f"Loaded {robot_type} image: {path}")
+                        print(f"Loaded {costume} image: {path}")
                     else:
                         cls._photoImages[cache_key][direction] = PhotoImage(file=path)
-                        print(f"Loaded {robot_type} image (unscaled): {path}")
+                        print(f"Loaded {costume} image (unscaled): {path}")
                 except Exception as e:
                     print(f"Error loading {filename} from {path}: {e}")
             else:
-                print(f"Warning: Could not find {filename} for robot type '{robot_type}' in local or library folders")
+                print(f"Warning: Could not find {filename} for costume '{costume}' in local or library folders")
 
     @classmethod
-    def _getResizedImage(cls, robot_type, direction, size, greyscale=False, alpha=None):
+    def _getResizedImage(cls, costume, direction, size, greyscale=False, alpha=None):
         """Get a resized PhotoImage for the given robot, direction and size
 
         Args:
             alpha: Optional alpha transparency value (0-255). If provided, creates a semi-transparent image.
         """
         if not PIL_AVAILABLE:
-            return cls._photoImages.get(robot_type, {}).get(direction)
+            return cls._photoImages.get(costume, {}).get(direction)
 
         # Choose cache based on flags - use a combined cache for both greyscale and alpha
         if greyscale and alpha is not None:
@@ -121,11 +121,11 @@ class RobotImage:
             cache_dict = cls._photoImages
 
         # Create cache key that includes both flags
-        cache_key = (robot_type, direction, size, greyscale, alpha)
+        cache_key = (costume, direction, size, greyscale, alpha)
 
         if cache_key not in cache_dict:
             # Resize the PIL image
-            pil_img = cls._pilImages.get(robot_type, {}).get(direction)
+            pil_img = cls._pilImages.get(costume, {}).get(direction)
             if pil_img is None:
                 return None
             resized = pil_img.resize((size, size), Image.Resampling.LANCZOS)
@@ -155,7 +155,7 @@ class RobotImage:
 
         return cache_dict.get(cache_key)
 
-    def __init__(self, street, avenue, direction, window, fill='blue', outline='black', robot_type=None):
+    def __init__(self, street, avenue, direction, window, fill='blue', outline='black', costume=None):
         self._canvas = window._canvas
         self._street = street
         self._avenue = avenue
@@ -165,8 +165,8 @@ class RobotImage:
         self._place = self._scaler(street, avenue)
 
         self._direction = direction
-        # Use provided robot_type or fall back to class default
-        self._robot_type = robot_type if robot_type else RobotImage._defaultRobotType
+        # Use provided costume or fall back to class default
+        self._costume = costume if costume else RobotImage._defaultCostume
         if fill == None:
             fill = "yellow"
         self._fill = fill
@@ -174,8 +174,8 @@ class RobotImage:
         self.tag = "r"+str(RobotImage.rNumber)
         RobotImage.rNumber += 1
 
-        # Load images for this robot type (use converted value with default)
-        RobotImage._loadImages(self._robot_type)
+        # Load images for this costume (use converted value with default)
+        RobotImage._loadImages(self._costume)
 
         self._x = 0
         self._y = 0
@@ -205,6 +205,14 @@ class RobotImage:
         if self._canvas:
             self._canvas.delete(self.tag)
         # Redraw with appropriate transparency
+        self.__buildImage()
+
+    def setCostume(self, costume):
+        """Change this robot's costume (image) on the fly."""
+        self._costume = costume
+        RobotImage._loadImages(self._costume)
+        if self._canvas:
+            self._canvas.delete(self.tag)
         self.__buildImage()
 
     def move(self, amount):
@@ -268,9 +276,9 @@ class RobotImage:
         # Use semi-transparent (150/255 alpha ≈ 59%) if transparent flag is set
         alpha = 150 if self._isTransparent else None
         if PIL_AVAILABLE:
-            image = RobotImage._getResizedImage(self._robot_type, self._direction, image_size, greyscale=self._isGreyed, alpha=alpha)
+            image = RobotImage._getResizedImage(self._costume, self._direction, image_size, greyscale=self._isGreyed, alpha=alpha)
         else:
-            image = RobotImage._photoImages.get(self._robot_type, {}).get(self._direction)
+            image = RobotImage._photoImages.get(self._costume, {}).get(self._direction)
 
         if image:
             self._canvas.create_image(x, y, image=image, tag=self.tag)
@@ -700,9 +708,9 @@ class KarelWindow(Frame):
 
 
     
-    def addRobot(self, street, avenue, direction, fill, outline, robot_type=None):
+    def addRobot(self, street, avenue, direction, fill, outline, costume=None):
         #        fill and outline are colors, default to blue, black
-        robot = RobotImage(street, avenue, direction, self, fill, outline, robot_type)
+        robot = RobotImage(street, avenue, direction, self, fill, outline, costume)
         self.__contents.append(robot)
         return robot # the world matches these with the actual robot objects in the model. 
     

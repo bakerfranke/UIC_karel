@@ -80,7 +80,7 @@ class RobotWorld(RobotWorldBase, Observer) :
         """Enable or disable global trace output for all robots."""
         self.trace_enabled = enabled
 
-    def setRobotType(self, robot_type):
+    def setRobotCostume(self, costume):
         """No-op in headless mode - robot images only apply when graphics are on."""
         pass
 

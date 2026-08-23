@@ -106,9 +106,9 @@ class RobotWorld(RobotWorldBase, Observer) :
             self._registerRobot(robot)
             if _window != None:
                 (street, avenue) = (robot._UrRobot__street, robot._UrRobot__avenue)
-                robot_type = getattr(robot, '_UrRobot__robot_type', 'karel')
+                costume = getattr(robot, '_UrRobot__costume', 'karel')
                 self.__gRobots[robot] = _window.addRobot(street, avenue, robot._UrRobot__direction,
-                                                     robot._UrRobot__fill, robot._UrRobot__outline, robot_type)
+                                                     robot._UrRobot__fill, robot._UrRobot__outline, costume)
             
         elif action == karel.robota.UrRobot.turnLeftAction :
             if _window != None:
@@ -135,7 +135,11 @@ class RobotWorld(RobotWorldBase, Observer) :
         elif action == karel.robota.UrRobot.setVisibleAction:
             if _window is not None and robot in self.__gRobots:
                 self.__gRobots[robot].setVisible(robotState.visible())
-        
+
+        elif action == karel.robota.UrRobot.setCostumeAction:
+            if _window is not None and robot in self.__gRobots:
+                self.__gRobots[robot].setCostume(robotState.costume())
+
         else :
             pass
         
@@ -177,16 +181,16 @@ class RobotWorld(RobotWorldBase, Observer) :
     def delay(self):
         return self.__delay
 
-    def setRobotType(self, robot_type):
-        """Set the default robot type/icon for all new robots.
+    def setRobotCostume(self, costume):
+        """Set the default costume/icon for all new robots.
 
         Args:
-            robot_type (str): Name of the robot type (e.g., 'sparky', 'karel', 'dragon')
-                              Images should be named: {robot_type}_north.png, etc.
+            costume (str): Name of the costume (e.g., 'sparky', 'karel', 'dragon')
+                              Images should be named: {costume}_north.png, etc.
         """
         from karel.tkwindow import RobotImage
-        RobotImage._defaultRobotType = robot_type
-        print(f"Default robot type set to: {robot_type}")
+        RobotImage._defaultCostume = costume
+        print(f"Default costume set to: {costume}")
 
 #    _runnables = []
     

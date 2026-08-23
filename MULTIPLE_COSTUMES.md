@@ -1,8 +1,8 @@
-# Multiple Robot Types - Implementation Guide
+# Multiple Costumes - Implementation Guide
 
 ## Overview
 
-The Karel library now supports multiple robot image types. All robots default to **Sparky**, but you can create robots with different appearances. You can also set a world-wide default using `world.setRobotType()`.
+The Karel library now supports multiple robot costumes. All robots default to **Sparky**, but you can create robots with different appearances. You can also set a world-wide default using `world.setRobotCostume()`.
 
 ## File Structure
 
@@ -11,7 +11,7 @@ Robot images can be stored in two locations (user folder takes priority):
 1. **User's local folder** (recommended): `./robot_images/` (same level as your main program)
 2. **Library folder** (fallback): `karel/robot_images/`
 
-When loading a robot type, the system checks the local folder first, then falls back to the library folder. This allows you to override library robots or create custom ones.
+When loading a costume, the system checks the local folder first, then falls back to the library folder. This allows you to override library robots or create custom ones.
 
 ### Naming Convention
 
@@ -31,12 +31,12 @@ karel/robot_images/
 ├── dragon_east.png
 ├── dragon_south.png
 ├── dragon_west.png
-└── ... (add more robot types as needed)
+└── ... (add more costumes as needed)
 ```
 
-**Pattern:** `{robot_type}_{direction}.png`
+**Pattern:** `{costume}_{direction}.png`
 
-- `robot_type`: lowercase, no spaces (e.g., sparky, karel, dragon, alien)
+- `costume`: lowercase, no spaces (e.g., sparky, karel, dragon, alien)
 - `direction`: north, east, south, west (lowercase)
 
 ## Usage Examples
@@ -46,22 +46,22 @@ karel/robot_images/
 from karel.robota import *
 
 world.setSize(8, 8)
-bob = UrRobot(4, 2, East, 7)  # Uses default robot type (sparky)
+bob = UrRobot(4, 2, East, 7)  # Uses default costume (sparky)
 
 bob.move()
 bob.turnLeft()
 bob.turnOff()
 ```
 
-### Different Robot Type Per Robot
+### Different Costume Per Robot
 ```python
 from karel.robota import *
 
 world.setSize(8, 8)
 
-# Create robots with different types
-bob = UrRobot(4, 2, East, 7, robot_type='karel')
-alice = UrRobot(5, 3, North, 5, robot_type='dragon')
+# Create robots with different costumes
+bob = UrRobot(4, 2, East, 7, costume='karel')
+alice = UrRobot(5, 3, North, 5, costume='dragon')
 charlie = UrRobot(3, 4, West, 10)  # Uses default
 
 bob.move()
@@ -69,17 +69,17 @@ alice.turnLeft()
 charlie.move()
 ```
 
-### Set World Default Robot Type
+### Set World Default Costume
 ```python
 from karel.robota import *
 
 world.setSize(10, 10)
-world.setRobotType('karel')  # Set default to karel
+world.setRobotCostume('karel')  # Set default to karel
 
 # Now all new robots use 'karel' by default
 robot1 = UrRobot(3, 3, East, 5)      # Uses 'karel'
 robot2 = UrRobot(7, 7, North, 5)     # Uses 'karel'
-robot3 = UrRobot(5, 5, South, 5, robot_type='sparky')  # Override with 'sparky'
+robot3 = UrRobot(5, 5, South, 5, costume='sparky')  # Override with 'sparky'
 
 robot1.move()
 robot2.move()
@@ -92,8 +92,8 @@ from karel.robota import *
 
 world.setSize(10, 10)
 
-# Robot class also supports robot_type
-scout = Robot(5, 5, North, infinity, robot_type='sparky')
+# Robot class also supports costume
+scout = Robot(5, 5, North, infinity, costume='sparky')
 
 while scout.frontIsClear():
     scout.move()
@@ -105,15 +105,15 @@ scout.turnOff()
 
 ### World Methods
 
-#### `world.setRobotType(robot_type)`
-Set the default robot type for all subsequent robots.
+#### `world.setRobotCostume(costume)`
+Set the default costume for all subsequent robots.
 
 ```python
-world.setRobotType('karel')
+world.setRobotCostume('karel')
 ```
 
 **Parameters:**
-- `robot_type` (str): Name of the robot type to use as default
+- `costume` (str): Name of the costume to use as default
   - Examples: 'sparky', 'karel', 'dragon', 'foofoo'
   - Images must be in local `robot_images/` or library `karel/robot_images/`
 
@@ -123,13 +123,13 @@ world.setRobotType('karel')
 ```python
 UrRobot(street, avenue, direction, beepers, 
         fill='yellow', outline='black', 
-        visible=True, robot_type=None)
+        visible=True, costume=None)
 ```
 
 **Parameters:**
-- `robot_type` (str or None): Name of robot type (e.g., 'sparky', 'karel', 'dragon')
-  - If `None` (default), uses the world default set by `world.setRobotType()` (initially 'sparky')
-  - Must match image files: `{robot_type}_north.png`, etc.
+- `costume` (str or None): Name of costume (e.g., 'sparky', 'karel', 'dragon')
+  - If `None` (default), uses the world default set by `world.setRobotCostume()` (initially 'sparky')
+  - Must match image files: `{costume}_north.png`, etc.
   - Case-sensitive
   - Searches local `robot_images/` folder first, then library folder
 
@@ -137,12 +137,12 @@ UrRobot(street, avenue, direction, beepers,
 ```python
 Robot(street, avenue, direction, beepers,
       fill='yellow', outline='black', 
-      robot_type=None)
+      costume=None)
 ```
 
-Same parameters as `UrRobot` with `robot_type` support.
+Same parameters as `UrRobot` with `costume` support.
 
-## Adding New Robot Types
+## Adding New Costumes
 
 ### Folder Priority
 
@@ -152,11 +152,11 @@ When loading robot images, the library searches in this order:
 2. **Library `robot_images/` folder** (inside `karel/` module) ← Default library images
 
 This allows you to:
-- Create custom robot types
-- Override library robot types (sparky, karel, etc.)
+- Create custom costumes
+- Override library costumes (sparky, karel, etc.)
 - Keep your custom robots with your project
 
-### Example: Custom Robot Type
+### Example: Custom Costume
 
 Create a folder structure:
 ```
@@ -174,7 +174,7 @@ In your program:
 from karel.robota import *
 
 world.setSize(10, 10)
-bot = UrRobot(5, 5, East, 5, robot_type='foofoo')
+bot = UrRobot(5, 5, East, 5, costume='foofoo')
 ```
 
 The library will automatically find your local `robot_images/foofoo_*.png` files!
@@ -199,7 +199,7 @@ karel/robot_images/
 
 ### Step 3: Use in Code
 ```python
-alice = UrRobot(5, 5, North, 10, robot_type='myrobot')
+alice = UrRobot(5, 5, North, 10, costume='myrobot')
 ```
 
 That's it! The library will automatically load the images.
@@ -251,19 +251,19 @@ If a robot displays as a simple circle instead of an image, it means:
 Check console output for error messages.
 
 ### Wrong Robot Appearing
-Make sure you're specifying the correct `robot_type`:
+Make sure you're specifying the correct `costume`:
 ```python
 # This looks for sparky_*.png
 bob = UrRobot(4, 2, East, 7)
 
 # This looks for alice_*.png
-bob = UrRobot(4, 2, East, 7, robot_type='alice')
+bob = UrRobot(4, 2, East, 7, costume='alice')
 ```
 
 ## Implementation Details
 
 ### How It Works
-1. When a robot is created with `robot_type='myrobot'`, the code looks for:
+1. When a robot is created with `costume='myrobot'`, the code looks for:
    - `myrobot_north.png`
    - `myrobot_east.png`
    - `myrobot_south.png`
@@ -277,7 +277,7 @@ bob = UrRobot(4, 2, East, 7, robot_type='alice')
 
 ### Image Caching
 - Original images loaded once using PIL
-- Resized versions cached by (robot_type, direction, size)
+- Resized versions cached by (costume, direction, size)
 - When window resizes, images are regenerated at new size
 - Very efficient - minimal memory overhead
 
@@ -290,7 +290,7 @@ from karel.robota import *
 world.setSize(10, 10)
 world.setDelay(50)
 
-sparky = UrRobot(5, 5, East, 5, robot_type='sparky')
+sparky = UrRobot(5, 5, East, 5, costume='sparky')
 
 for i in range(4):
     sparky.move()
@@ -307,9 +307,9 @@ from karel.robota import *
 world.setSize(12, 12)
 world.setDelay(30)
 
-# Different robot types
-bot1 = UrRobot(3, 3, East, 5, robot_type='sparky')
-bot2 = UrRobot(9, 9, West, 5, robot_type='karel')
+# Different costumes
+bot1 = UrRobot(3, 3, East, 5, costume='sparky')
+bot2 = UrRobot(9, 9, West, 5, costume='karel')
 
 # Both robots move independently
 for i in range(3):
@@ -326,7 +326,7 @@ bot2.turnOff()
 
 - Custom colors applied to images at runtime
 - Animation frames for walking
-- Size variation per robot type
+- Size variation per costume
 - Robot-specific behaviors
 
 ## Summary
@@ -334,5 +334,5 @@ bot2.turnOff()
 ✅ Store robot images as: `{name}_{direction}.png`
 ✅ Default robot is 'sparky'
 ✅ Images should be ~100-120px, ~5-15KB each
-✅ Can mix different robot types in same program
+✅ Can mix different costumes in same program
 ✅ Fully compatible with existing code

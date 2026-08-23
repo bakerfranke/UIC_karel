@@ -130,6 +130,7 @@ class UrRobot(_RobotSkeleton, Observable):
     turnOffAction = 4
     createAction = 5
     setVisibleAction = 6
+    setCostumeAction = 7
 
     # a simple dictionary to get the string for the int code
     actions = {
@@ -139,10 +140,11 @@ class UrRobot(_RobotSkeleton, Observable):
         3: "putBeeper()",
         4: "turnOff()",
         5: "New Robot Created",
-        6: "Robot Visibility Changed"
+        6: "Robot Visibility Changed",
+        7: "Robot Costume Changed"
     }
     
-    def __init__(self, street, avenue, direction, beepers, fill = 'yellow', outline = 'black', visible=True, robot_type=None):
+    def __init__(self, street, avenue, direction, beepers, fill = 'yellow', outline = 'black', visible=True, costume=None):
         "Create a robot in a particular situation."
 
         if not UrRobot._graphics_initialized:
@@ -162,7 +164,7 @@ class UrRobot(_RobotSkeleton, Observable):
         self.__ID = _incrementRobotCount()
         self.__fill = fill
         self.__outline = outline
-        self.__robot_type = robot_type
+        self.__costume = costume
         self.__running = True;
         if world is not None:
             self.addObserver(world)
@@ -259,7 +261,7 @@ class UrRobot(_RobotSkeleton, Observable):
         # Always refresh graphics for actions with world-visible side effects (beeper
         # changes) or that reveal robot state (setVisible, turnOff/crash), even if the
         # robot itself is currently invisible - only pure movement stays gated on visibility.
-        _alwaysRefresh = (self.setVisibleAction, self.pickBeeperAction, self.putBeeperAction, self.turnOffAction)
+        _alwaysRefresh = (self.setVisibleAction, self.setCostumeAction, self.pickBeeperAction, self.putBeeperAction, self.turnOffAction)
         if action in _alwaysRefresh or self.__visible:
             self._update_if_graphics()
 
@@ -327,6 +329,12 @@ class UrRobot(_RobotSkeleton, Observable):
         self.__pause(f'setVisible({tf})')
         self.__visible = tf
         self._perform_action(self.setVisibleAction)
+
+    def setCostume(self, costume):
+        "Change this robot's costume (image) to a different one, e.g. setCostume('sparky')."
+        self.__pause(f'setCostume({costume})')
+        self.__costume = costume
+        self._perform_action(self.setCostumeAction)
 
     def pickBeeper(self):
         "Pick a beeper from the current corner or fail if there are none to pick."
@@ -416,7 +424,8 @@ class UrRobot(_RobotSkeleton, Observable):
             self.__running = robot._UrRobot__running
             self.__id = robot._UrRobot__ID
             self.__action = action
-            self.__visible = robot._UrRobot__visible  
+            self.__visible = robot._UrRobot__visible
+            self.__costume = robot._UrRobot__costume
 
         def street(self):
             return self.__street
@@ -432,8 +441,11 @@ class UrRobot(_RobotSkeleton, Observable):
             return self.__action
     
         def visible(self):
-           return self.__visible                      # <-- ADD THIS
-    
+           return self.__visible
+
+        def costume(self):
+           return self.__costume
+
         def id(self):
             return self.__id
         
@@ -442,8 +454,8 @@ from karel.sensorpack import _SensorPack
 class Robot(UrRobot, _SensorPack) :
     "Adds sensing facilities to robots, but otherwise these behave just like UrRobots."
 
-    def __init__(self, street, avenue, direction, beepers, fill = 'yellow', outline = 'black', robot_type=None):
-        UrRobot.__init__(self, street, avenue, direction, beepers, fill, outline, robot_type=robot_type)
+    def __init__(self, street, avenue, direction, beepers, fill = 'yellow', outline = 'black', costume=None):
+        UrRobot.__init__(self, street, avenue, direction, beepers, fill, outline, costume=costume)
         
     def anyBeepersInBeeperBag(self):
         "Return true if there are beepers carried by this robot."

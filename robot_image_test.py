@@ -3,7 +3,7 @@ from karel.robota import *
 
 world.setSize(8,8)
 world.setDelay(40)
-#world.setRobotType("foo_blah")
+#world.setRobotCostume("foo_blah")
 
 bob = UrRobot(1, 1, East, -1)
 

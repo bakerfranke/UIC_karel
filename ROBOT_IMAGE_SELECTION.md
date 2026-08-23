@@ -15,7 +15,7 @@ To allow programs to choose which robot drawing to use, you need to modify the l
 
 ### Step 1: Modify `RobotImage.__init__()` in `tkwindow.py`
 
-Change the `RobotImage` class constructor to accept a `robot_type` parameter:
+Change the `RobotImage` class constructor to accept a `costume` parameter:
 
 **Current code (around line 38):**
 ```python
@@ -24,7 +24,7 @@ def __init__(self, street, avenue, direction, window, fill='blue', outline='blac
 
 **Modified code:**
 ```python
-def __init__(self, street, avenue, direction, window, fill='blue', outline='black', robot_type='karel'):
+def __init__(self, street, avenue, direction, window, fill='blue', outline='black', costume='karel'):
 ```
 
 **Current code (around line 52):**
@@ -36,9 +36,9 @@ def __init__(self, street, avenue, direction, window, fill='blue', outline='blac
 **Modified code:**
 ```python
         # the next statement defines which figure will be drawn
-        if robot_type == 'alien':
+        if costume == 'alien':
             package = self.alienPackage
-        elif robot_type == 'crab':
+        elif costume == 'crab':
             package = self.crabPackage
         else:  # default to 'karel'
             package = self.karelPackage
@@ -46,7 +46,7 @@ def __init__(self, street, avenue, direction, window, fill='blue', outline='blac
 
 ### Step 2: Modify `addRobot()` method in `tkwindow.py`
 
-Change the `addRobot` method to accept and pass through the `robot_type` parameter:
+Change the `addRobot` method to accept and pass through the `costume` parameter:
 
 **Current code (around line 647):**
 ```python
@@ -59,16 +59,16 @@ Change the `addRobot` method to accept and pass through the `robot_type` paramet
 
 **Modified code:**
 ```python
-    def addRobot(self, street, avenue, direction, fill, outline, robot_type='karel'):
+    def addRobot(self, street, avenue, direction, fill, outline, costume='karel'):
         #        fill and outline are colors, default to blue, black
-        robot = RobotImage(street, avenue, direction, self, fill, outline, robot_type)
+        robot = RobotImage(street, avenue, direction, self, fill, outline, costume)
         self.__contents.append(robot)
         return robot
 ```
 
 ### Step 3: Modify `RobotWorld.update()` in `tkworldadapter.py`
 
-Update the method where robots are created to pass the `robot_type` parameter:
+Update the method where robots are created to pass the `costume` parameter:
 
 **Current code (around line 83-84):**
 ```python
@@ -78,14 +78,14 @@ Update the method where robots are created to pass the `robot_type` parameter:
 
 **Modified code:**
 ```python
-            robot_type = getattr(robot, '_UrRobot__robot_type', 'karel')  # get robot_type or default
+            costume = getattr(robot, '_UrRobot__costume', 'karel')  # get costume or default
             self.__gRobots[robot] = _window.addRobot(street, avenue, robot._UrRobot__direction,
-                                                     robot._UrRobot__fill, robot._UrRobot__outline, robot_type)
+                                                     robot._UrRobot__fill, robot._UrRobot__outline, costume)
 ```
 
 ### Step 4: Modify `UrRobot.__init__()` in `robota.py`
 
-Add a `robot_type` parameter to the robot constructor:
+Add a `costume` parameter to the robot constructor:
 
 **Current code (around line 113):**
 ```python
@@ -94,12 +94,12 @@ Add a `robot_type` parameter to the robot constructor:
 
 **Modified code:**
 ```python
-    def __init__(self, street, avenue, direction, beepers, fill = 'yellow', outline = 'black', visible=True, robot_type='karel'):
+    def __init__(self, street, avenue, direction, beepers, fill = 'yellow', outline = 'black', visible=True, costume='karel'):
 ```
 
 **Add this line after line 133:**
 ```python
-        self.__robot_type = robot_type
+        self.__costume = costume
 ```
 
 ### Step 5: Update the `Robot` class in `robota.py` (optional)
@@ -114,8 +114,8 @@ If you're using the `Robot` class (which has sensors), update its constructor to
 
 **Modified code:**
 ```python
-    def __init__(self, street, avenue, direction, beepers, fill = 'yellow', outline = 'black', robot_type='karel'):
-        UrRobot.__init__(self, street, avenue, direction, beepers, fill, outline, robot_type=robot_type)
+    def __init__(self, street, avenue, direction, beepers, fill = 'yellow', outline = 'black', costume='karel'):
+        UrRobot.__init__(self, street, avenue, direction, beepers, fill, outline, costume=costume)
 ```
 
 ---
@@ -131,7 +131,7 @@ from karel.robota import *
 world.setSize(8, 8)
 world.setDelay(20)
 
-bob = UrRobot(4, 2, East, 7, robot_type='alien')
+bob = UrRobot(4, 2, East, 7, costume='alien')
 
 for i in range(4):
     bob.move()
@@ -147,7 +147,7 @@ from karel.robota import *
 world.setSize(8, 8)
 world.setDelay(20)
 
-bob = UrRobot(4, 2, East, 7, robot_type='crab')
+bob = UrRobot(4, 2, East, 7, costume='crab')
 
 bob.move()
 bob.putBeeper()
@@ -161,7 +161,7 @@ from karel.robota import *
 world.setSize(8, 8)
 world.setDelay(20)
 
-bob = UrRobot(4, 2, East, 7)  # robot_type defaults to 'karel'
+bob = UrRobot(4, 2, East, 7)  # costume defaults to 'karel'
 
 bob.move()
 bob.turnOff()
@@ -173,10 +173,10 @@ bob.turnOff()
 
 | File | Class/Method | Change |
 |------|--------------|--------|
-| `tkwindow.py` | `RobotImage.__init__()` | Add `robot_type` parameter and selection logic |
-| `tkwindow.py` | `addRobot()` | Add `robot_type` parameter and pass it through |
-| `tkworldadapter.py` | `RobotWorld.update()` | Extract and pass `robot_type` when creating robots |
-| `robota.py` | `UrRobot.__init__()` | Add `robot_type` parameter and store it |
-| `robota.py` | `Robot.__init__()` | Add `robot_type` parameter and pass it to parent |
+| `tkwindow.py` | `RobotImage.__init__()` | Add `costume` parameter and selection logic |
+| `tkwindow.py` | `addRobot()` | Add `costume` parameter and pass it through |
+| `tkworldadapter.py` | `RobotWorld.update()` | Extract and pass `costume` when creating robots |
+| `robota.py` | `UrRobot.__init__()` | Add `costume` parameter and store it |
+| `robota.py` | `Robot.__init__()` | Add `costume` parameter and pass it to parent |
 
-After these modifications, all three robot types will be accessible and selectable from any Karel program!
+After these modifications, all three costumes will be accessible and selectable from any Karel program!
