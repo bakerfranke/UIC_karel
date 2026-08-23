@@ -517,13 +517,32 @@ class KarelWindow(Frame):
         boxWidth, boxHeight = 180, 70
         x0, y0 = (w - boxWidth) / 2, (h - boxHeight) / 2
         x1, y1 = x0 + boxWidth, y0 + boxHeight
+        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
 
-        self._pauseOverlayRect = self._canvas.create_rectangle(
-            x0, y0, x1, y1, fill='grey', stipple='gray50', outline='black', width=2,
-            tags=('pauseOverlay',)
-        )
+        if PIL_AVAILABLE:
+            # Real 50% alpha + rounded corners, via a small generated RGBA image
+            # (same technique already used for greyed-out/semi-transparent robots).
+            from PIL import ImageDraw
+            img = Image.new('RGBA', (boxWidth, boxHeight), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(img)
+            box = [1, 1, boxWidth - 2, boxHeight - 2]
+            if hasattr(draw, 'rounded_rectangle'):  # Pillow >= 8.2
+                draw.rounded_rectangle(box, radius=16, fill=(80, 80, 80, 128), outline=(0, 0, 0, 200), width=2)
+            else:
+                draw.rectangle(box, fill=(80, 80, 80, 128), outline=(0, 0, 0, 200), width=2)
+            self._pauseOverlayPhoto = ImageTk.PhotoImage(img)
+            self._pauseOverlayRect = self._canvas.create_image(
+                cx, cy, image=self._pauseOverlayPhoto, tags=('pauseOverlay',)
+            )
+        else:
+            # Fallback when Pillow isn't installed: a plain (non-rounded, stippled) rectangle.
+            self._pauseOverlayRect = self._canvas.create_rectangle(
+                x0, y0, x1, y1, fill='grey', stipple='gray50', outline='black', width=2,
+                tags=('pauseOverlay',)
+            )
+
         self._pauseOverlayText = self._canvas.create_text(
-            (x0 + x1) / 2, (y0 + y1) / 2, text='⏸ Paused', font=('Arial', 16, 'bold'),
+            cx, cy, text='⏸ Paused', font=('Arial', 16, 'bold'),
             fill='black', tags=('pauseOverlay',)
         )
         self._canvas.tag_raise('pauseOverlay')
@@ -536,6 +555,7 @@ class KarelWindow(Frame):
         self._canvas.delete('pauseOverlay')
         self._pauseOverlayRect = None
         self._pauseOverlayText = None
+        self._pauseOverlayPhoto = None
 
     def _startDragPausedOverlay(self, event):
         self._pauseOverlayDragOrigin = (event.x, event.y)
