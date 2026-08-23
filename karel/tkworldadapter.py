@@ -92,17 +92,6 @@ class RobotWorld(RobotWorldBase, Observer) :
             if not paused and delay_ms > 0:
                 _window._startup_delay = delay_ms
 
-    def _syncRobotTransparencyAt(self, street, avenue):
-        """Make any robot(s) standing at this corner semi-transparent when there are beepers
-        here, so a beeper picked up or put down from underneath the robot is actually visible
-        instead of being fully hidden behind the (opaque) robot image."""
-        if _window is None:
-            return
-        hasBeepers = self._beepers.get((street, avenue), 0) != 0
-        for gRobot in self.__gRobots.values():
-            if gRobot._street == street and gRobot._avenue == avenue:
-                gRobot.setTransparent(hasBeepers)
-
     def update(self, robot, robotState = None):
         "This is called whenever any robot changes state since the world observes all robots"
 
@@ -112,7 +101,6 @@ class RobotWorld(RobotWorldBase, Observer) :
 #            self.__gRobots[robot].move(_window.drawArea(), _window.delta())
             if _window != None:
                 _window.moveRobot(self.__gRobots[robot])
-                self._syncRobotTransparencyAt(robotState.street(), robotState.avenue())
 
         elif action == karel.robota.UrRobot.createAction :
             self._registerRobot(robot)
@@ -121,8 +109,7 @@ class RobotWorld(RobotWorldBase, Observer) :
                 robot_type = getattr(robot, '_UrRobot__robot_type', 'karel')
                 self.__gRobots[robot] = _window.addRobot(street, avenue, robot._UrRobot__direction,
                                                      robot._UrRobot__fill, robot._UrRobot__outline, robot_type)
-                self._syncRobotTransparencyAt(street, avenue)
-
+            
         elif action == karel.robota.UrRobot.turnLeftAction :
             if _window != None:
                 self.__gRobots[robot].rotate()
@@ -222,7 +209,6 @@ class RobotWorld(RobotWorldBase, Observer) :
             if _window != None:
                 _window.deleteBeeper(place, True)
                 _window.placeBeepers(street, avenue, infinity)
-                self._syncRobotTransparencyAt(street, avenue)
                 self.__beeperControl.notify()
                 self.__beeperControl.release()
             return
@@ -234,7 +220,6 @@ class RobotWorld(RobotWorldBase, Observer) :
                 if inWorld > 0 :
                     _window.deleteBeeper(place)
                 _window.placeBeepers(street, avenue, toPut)
-                self._syncRobotTransparencyAt(street, avenue)
         self.__beeperControl.notify()
         self.__beeperControl.release()
             
@@ -267,13 +252,11 @@ class RobotWorld(RobotWorldBase, Observer) :
                 self._beepers.pop(place)
                 if _window != None :
                     _window.deleteBeeper(place)
-                    self._syncRobotTransparencyAt(street, avenue)
             else:
                 self._beepers[place] = howMany
                 if _window != None:
                     _window.deleteBeeper(place)
                     _window.placeBeepers(street, avenue, howMany)
-                    self._syncRobotTransparencyAt(street, avenue)
         elif howMany == infinity :
             self.__beeperControl.notify()
             self.__beeperControl.release()
