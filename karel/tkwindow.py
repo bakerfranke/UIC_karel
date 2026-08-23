@@ -411,14 +411,16 @@ class KarelWindow(Frame):
         root.columnconfigure(0, weight=1)
         root.rowconfigure(0, weight=1)
         self.grid(sticky="news")
-        self.columnconfigure(2, weight=1)  # empty spacer column - absorbs resize growth, keeping Speed anchored at the right edge
+        # Equal-weight spacer columns on both sides of Speed keep it centered as the window resizes.
+        self.columnconfigure(2, weight=1)
+        self.columnconfigure(5, weight=1)
         self.rowconfigure(1, weight=1)
 
         speedLabel = Label(self, text = "Speed")
         speedLabel.grid(row=0, column=3, sticky="es") #added params from chatgpt
 
-        #|   0   |  1   |   2    |   3   |   4   |
-        #|  RUN  | STEP | EMPTY  |  LBL  | SLID  |
+        #|   0   |  1   |   2    |   3   |   4   |   5    |
+        #|  RUN  | STEP | EMPTY  |  LBL  | SLID  | EMPTY  |
 
         if callback != None : # this makes the speed slider work.
 
@@ -454,7 +456,7 @@ class KarelWindow(Frame):
 
         #BEF TODO: make the canvas and window scaled to the actual number of streets and avenues?
         self._canvas = Canvas(self, height = _windowBottom, width = _windowRight, bg = 'white')
-        self._canvas.grid(row=1, column=0, columnspan=5, sticky="news")
+        self._canvas.grid(row=1, column=0, columnspan=6, sticky="news")
         self.setSize(streets, avenues)
         self.placeBeeper = self.placeBeepers
 
