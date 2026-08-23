@@ -414,7 +414,7 @@ class KarelWindow(Frame):
         self.columnconfigure(0, weight=1)
         self.rowconfigure(1, weight=1)
 
-        speedLabel = Label(text = "Speed")
+        speedLabel = Label(self, text = "Speed")
         speedLabel.grid(row=0, column=1, sticky="es") #added params from chatgpt
 
         #|   0   |  1   |   2   |   3   |   4   |
@@ -426,7 +426,7 @@ class KarelWindow(Frame):
             self.iv = IntVar()
             self.iv.trace('r', callback)
 
-            self.scale = Scale(orient = "horizontal", variable = self.iv)
+            self.scale = Scale(self, orient = "horizontal", variable = self.iv)
             self.scale.set(20)
             self.scale.grid(row=0, column=2, sticky="ew")
 
@@ -453,7 +453,7 @@ class KarelWindow(Frame):
 
 
         #BEF TODO: make the canvas and window scaled to the actual number of streets and avenues?
-        self._canvas = Canvas(root, height = _windowBottom, width = _windowRight, bg = 'white')
+        self._canvas = Canvas(self, height = _windowBottom, width = _windowRight, bg = 'white')
         self._canvas.grid(row=1, column=0, columnspan=5, sticky="news")
         self.setSize(streets, avenues)
         self.placeBeeper = self.placeBeepers
