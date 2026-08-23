@@ -527,9 +527,9 @@ class KarelWindow(Frame):
             draw = ImageDraw.Draw(img)
             box = [1, 1, boxWidth - 2, boxHeight - 2]
             if hasattr(draw, 'rounded_rectangle'):  # Pillow >= 8.2
-                draw.rounded_rectangle(box, radius=16, fill=(80, 80, 80, 128), outline=(0, 0, 0, 200), width=2)
+                draw.rounded_rectangle(box, radius=16, fill=(200, 0, 0, 102), outline=(0, 0, 0, 200), width=2)
             else:
-                draw.rectangle(box, fill=(80, 80, 80, 128), outline=(0, 0, 0, 200), width=2)
+                draw.rectangle(box, fill=(200, 0, 0, 102), outline=(0, 0, 0, 200), width=2)
             self._pauseOverlayPhoto = ImageTk.PhotoImage(img)
             self._pauseOverlayRect = self._canvas.create_image(
                 cx, cy, image=self._pauseOverlayPhoto, tags=('pauseOverlay',)
@@ -537,7 +537,7 @@ class KarelWindow(Frame):
         else:
             # Fallback when Pillow isn't installed: a plain (non-rounded, stippled) rectangle.
             self._pauseOverlayRect = self._canvas.create_rectangle(
-                x0, y0, x1, y1, fill='grey', stipple='gray50', outline='black', width=2,
+                x0, y0, x1, y1, fill='#C80000', stipple='gray50', outline='black', width=2,
                 tags=('pauseOverlay',)
             )
 
