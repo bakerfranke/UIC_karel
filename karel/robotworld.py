@@ -58,6 +58,11 @@ class RobotWorld(RobotWorldBase, Observer) :
         print("Creating ", name)
         self.trace_enabled = True #Ascii Robot world has trace enabled by default
         self.display_mode = "karel"
+        # window(...) uses this object itself as the stand-in for _window in headless mode,
+        # so it needs the pause/step state robota.py's _check_pause() reads. Headless runs
+        # (e.g. automated grading) should never block, so these just stay inert.
+        self.is_paused = False
+        self.allow_one_step = False
 
     
     def set_display_mode(self, mode):
@@ -74,6 +79,14 @@ class RobotWorld(RobotWorldBase, Observer) :
     def setTrace(self, enabled: bool):
         """Enable or disable global trace output for all robots."""
         self.trace_enabled = enabled
+
+    def setRobotType(self, robot_type):
+        """No-op in headless mode - robot images only apply when graphics are on."""
+        pass
+
+    def startPaused(self, paused: bool = True, delay_ms: int = 0):
+        """No-op in headless mode - the Run/Pause/Step controls only exist when graphics are on."""
+        pass
 
     def update(self, robot, robotState = None):
         "This is called whenever any robot changes state since the world observes all robots"
