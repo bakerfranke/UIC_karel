@@ -256,10 +256,13 @@ class UrRobot(_RobotSkeleton, Observable):
         self.setChanged()
         self.notifyObservers(self.RobotState(self, action))
 
-        # Force a refresh if we just toggled visibility
-        if action == self.setVisibleAction or  self.__visible: 
-            self._update_if_graphics() 
-        
+        # Always refresh graphics for actions with world-visible side effects (beeper
+        # changes) or that reveal robot state (setVisible, turnOff/crash), even if the
+        # robot itself is currently invisible - only pure movement stays gated on visibility.
+        _alwaysRefresh = (self.setVisibleAction, self.pickBeeperAction, self.putBeeperAction, self.turnOffAction)
+        if action in _alwaysRefresh or self.__visible:
+            self._update_if_graphics()
+
         self.sleep()
               
     def move(self):
