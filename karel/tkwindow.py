@@ -411,14 +411,14 @@ class KarelWindow(Frame):
         root.columnconfigure(0, weight=1)
         root.rowconfigure(0, weight=1)
         self.grid(sticky="news")
-        self.columnconfigure(0, weight=1)
+        self.columnconfigure(4, weight=1)
         self.rowconfigure(1, weight=1)
 
         speedLabel = Label(self, text = "Speed")
-        speedLabel.grid(row=0, column=1, sticky="es") #added params from chatgpt
+        speedLabel.grid(row=0, column=2, sticky="es") #added params from chatgpt
 
         #|   0   |  1   |   2   |   3   |   4   |
-        #|EMPTY  | BUT  |  LBL  | SLID  |EMPTY  |
+        #|  RUN  | STEP |  LBL  | SLID  |EMPTY  |
 
         if callback != None : # this makes the speed slider work.
 
@@ -428,7 +428,7 @@ class KarelWindow(Frame):
 
             self.scale = Scale(self, orient = "horizontal", variable = self.iv)
             self.scale.set(20)
-            self.scale.grid(row=0, column=2, sticky="ew")
+            self.scale.grid(row=0, column=3, sticky="ew")
 
             # Add Run/Pause button
             # Label reflects the actual starting state (running by default, or paused if world.startPaused(True) was called)
@@ -439,7 +439,7 @@ class KarelWindow(Frame):
                 width=10,
                 font=("Arial", 12, "bold")
             )
-            self.play_pause_btn.grid(row=0, column=3, sticky="ew", padx=5, pady=3)
+            self.play_pause_btn.grid(row=0, column=0, sticky="ew", padx=5, pady=3)
 
             # Add Step button
             self.step_btn = Button(
@@ -449,7 +449,7 @@ class KarelWindow(Frame):
                 width=10,
                 font=("Arial", 11, "bold")
             )
-            self.step_btn.grid(row=0, column=4, sticky="ew", padx=5, pady=3)
+            self.step_btn.grid(row=0, column=1, sticky="ew", padx=5, pady=3)
 
 
         #BEF TODO: make the canvas and window scaled to the actual number of streets and avenues?
