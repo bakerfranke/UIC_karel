@@ -84,6 +84,14 @@ class RobotWorld(RobotWorldBase, Observer) :
         """No-op in headless mode - robot images only apply when graphics are on."""
         pass
 
+    def pause(self):
+        """No-op in headless mode - the Run/Pause/Step controls only exist when graphics are on."""
+        pass
+
+    def resume(self, delay_ms: int = 0):
+        """No-op in headless mode - the Run/Pause/Step controls only exist when graphics are on."""
+        pass
+
     def startPaused(self, paused: bool = True, delay_ms: int = 0):
         """No-op in headless mode - the Run/Pause/Step controls only exist when graphics are on."""
         pass

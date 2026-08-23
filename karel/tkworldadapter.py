@@ -66,25 +66,45 @@ class RobotWorld(RobotWorldBase, Observer) :
         """Enable or disable global trace output for all robots."""
         self.trace_enabled = enabled
 
-    def startPaused(self, paused: bool = True, delay_ms: int = 0):
-        """Configure whether the program starts paused (must click Run) or running immediately.
+    def pause(self):
+        """Pause execution. The next robot action will wait here until resume()
+        is called (or the human clicks Run/Step in the window). Works anywhere in
+        a program, not just at the top - e.g. to pause partway through a demo:
 
-        Programs start running immediately by default - no call needed for that.
-        Call this to opt into starting paused instead (e.g. for a step-by-step demo).
+            bob.move()
+            world.pause()
+            bob.move()   # <-- waits here for resume() or a Run/Step click
+        """
+        self._setPaused(True)
 
-        Must be called after the window exists (i.e. after world.setSize() or
-        world.readWorld()), since it configures that window.
+    def resume(self, delay_ms: int = 0):
+        """Resume execution (the inverse of pause()).
 
         Args:
-            paused: If True, start in paused mode (show "Run" button).
-                    If False, start running immediately (show "Pause" button).
-            delay_ms: Milliseconds to delay before starting (only used if paused=False)
+            delay_ms: Optional milliseconds to wait before actually resuming.
+        """
+        self._setPaused(False, delay_ms)
+
+    def startPaused(self, paused: bool = True, delay_ms: int = 0):
+        """Alias for pause()/resume() - configure whether execution is paused or running.
+
+        Programs start running immediately by default - no call needed for that.
+        Call this (or pause()) to opt into starting paused instead (e.g. for a
+        step-by-step demo).
+
+        Args:
+            paused: If True, pause (show "Run" button) - same as pause().
+                    If False, run (show "Pause" button) - same as resume().
+            delay_ms: Milliseconds to delay before resuming (only used if paused=False)
 
         Examples:
-            world.startPaused()       # Start paused - same as startPaused(True)
-            world.startPaused(True)   # Start paused
-            world.startPaused(False)  # Start running immediately (the overall default)
+            world.startPaused()       # Pause - same as pause()
+            world.startPaused(True)   # Pause - same as pause()
+            world.startPaused(False)  # Resume immediately - same as resume()
         """
+        self._setPaused(paused, delay_ms)
+
+    def _setPaused(self, paused: bool, delay_ms: int = 0):
         global _window
         if _window is not None:
             _window.is_paused = paused
