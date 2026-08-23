@@ -406,8 +406,14 @@ class KarelWindow(Frame):
         self.__walls = [] # all the basic visual elements (boundary, streets, street labels, etc. 
         
 #        self.nametowidget(" Karel's World ")
-        self.grid()
-        
+        # Let the frame fill the root window, and let the canvas (row 1) absorb
+        # extra space on resize while the toolbar row (row 0) stays its natural size.
+        root.columnconfigure(0, weight=1)
+        root.rowconfigure(0, weight=1)
+        self.grid(sticky="news")
+        self.columnconfigure(0, weight=1)
+        self.rowconfigure(1, weight=1)
+
         speedLabel = Label(text = "Speed")
         speedLabel.grid(row=0, column=1, sticky="es") #added params from chatgpt
 
@@ -452,7 +458,13 @@ class KarelWindow(Frame):
         self.setSize(streets, avenues)
         self.placeBeeper = self.placeBeepers
 
-        
+        # Rescale everything when the user resizes the window, so the grid keeps
+        # filling the available canvas space instead of staying pinned to the
+        # size it was created at.
+        self._lastCanvasSize = (self._canvas.winfo_reqwidth(), self._canvas.winfo_reqheight())
+        self._canvas.bind('<Configure>', self._on_canvas_resize)
+
+
 #        self.__streets = streets
 #        self.makeStreetsAndAvenues()
 #        self.makeBoundaryWalls()
@@ -495,8 +507,18 @@ class KarelWindow(Frame):
         self.labelStreetsAvenues()
         for item in self.__contents : #rebuild the contents of the world
             item.moveScale(self.__scaleFactor)
-        
-        
+
+    def _on_canvas_resize(self, event):
+        """Recompute scale and rebuild the grid when the canvas is resized (e.g. the user drags the window edge)."""
+        if event.width < 20 or event.height < 20:
+            return  # ignore degenerate sizes during initial layout
+        if (event.width, event.height) == self._lastCanvasSize:
+            return
+        self._lastCanvasSize = (event.width, event.height)
+        self.__bottom = event.height - _inset
+        self.__right = event.width - _inset
+        self.setSize(self.__streets, self.__avenues)
+
 #    def drawArea(self):
 #        return self._canvas
         
