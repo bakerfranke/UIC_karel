@@ -33,10 +33,16 @@ DEBUG = False
 
 # Placeholder imports (will be dynamically set)
 RobotWorld = None
-winodw = None
+window = None
 world = None
-from karel.tkworldadapter import RobotWorld as RW, window as win, world as wd
-RobotWorld, window, world = RW, win, wd
+
+# Try to load graphics, but allow headless operation
+try:
+    from karel.tkworldadapter import RobotWorld as RW, window as win, world as wd
+    RobotWorld, window, world = RW, win, wd
+except (ImportError, ModuleNotFoundError):
+    # Graphics not available (e.g., no tkinter or headless environment)
+    pass
 
 _window = None
 __robotCount = -1
@@ -45,6 +51,32 @@ def _incrementRobotCount() :
     global __robotCount
     __robotCount += 1
     return __robotCount
+
+def _check_pause():
+    """Check if execution is paused, handle stepping, and handle startup delay."""
+    global _window
+    if _window is None:
+        return  # No window, no pause checking
+
+    # Handle startup delay on first action
+    if hasattr(_window, '_first_action') and _window._first_action:
+        _window._first_action = False
+        if hasattr(_window, '_startup_delay') and _window._startup_delay > 0:
+            # Sleep for the startup delay
+            start_time = time.time()
+            delay_seconds = _window._startup_delay / 1000.0
+            while time.time() - start_time < delay_seconds:
+                _window.update()  # Keep GUI responsive
+                time.sleep(0.01)
+
+    # Wait while paused, unless stepping (allow_one_step is True)
+    while _window.is_paused and not _window.allow_one_step:
+        _window.update()  # Update GUI so buttons respond
+        time.sleep(0.01)  # Small sleep to prevent busy waiting
+
+    # If we broke out due to stepping, consume the step flag
+    if _window.allow_one_step:
+        _window.allow_one_step = False
 
 
 class _RobotSkeleton:
@@ -132,7 +164,8 @@ class UrRobot(_RobotSkeleton, Observable):
         self.__outline = outline
         self.__robot_type = robot_type
         self.__running = True;
-        self.addObserver(world)
+        if world is not None:
+            self.addObserver(world)
 #        world._World__registerRobot(self)
         self.setChanged()
         self.notifyObservers(self.RobotState(self, self.createAction))
@@ -153,24 +186,20 @@ class UrRobot(_RobotSkeleton, Observable):
             via the tkworldadpater(KarelWindow) (UrRobot.use_graphics=True) if in GUI mode, but it means
             ascii if NOT in graphics mode (UrRobot.use_graphics=False)
         """
-        #from karel.tkworldadapter import _window, window, world  # Ensure imports are correct
-
         global _window
-        if _window is None:  #BEF: if _window doesn't exist default to graphics mode
 
+        # Only initialize graphics if window function is available
+        if window is not None and _window is None:
             _window = window()  # Initialize the graphical window by default
             if(DEBUG): print("Creating window with graphics = ", use_graphics)
 
-            #world.setSize(10, 10)  # Default world size
-            #world.setDelay(20)  # Default animation delay
-        def default_task():
-            pass
+            def default_task():
+                pass
 
-        # Register atexit to run the graphics loop with the default task
-        # BEF: I'm not sure what this does when in no-graphics mode, but it's working for now.
-        import atexit
-        atexit.register(lambda: _window.run(default_task))
-        #atexit.register(_window.run)
+            # Register atexit to run the graphics loop with the default task
+            import atexit
+            atexit.register(lambda: _window.run(default_task))
+
         UrRobot._graphics_initialized = True
         
     def clone(self):
@@ -235,6 +264,7 @@ class UrRobot(_RobotSkeleton, Observable):
               
     def move(self):
         "Move one block in the current direction or fail if the front is not clear."
+        _check_pause()  # Check pause/step before executing
         self.__pause('move')
         if not self.__running :
             raise RobotNotRunning("Cannot move.")
@@ -250,6 +280,7 @@ class UrRobot(_RobotSkeleton, Observable):
             
     def turnOff(self):
         "Turn the robot off. After turnOff the robot will give errors if sent other messages."
+        _check_pause()  # Check pause/step before executing
         self.__pause('turnOff')
         self.__speedCheck()
         self.__running = False;
@@ -267,9 +298,18 @@ class UrRobot(_RobotSkeleton, Observable):
 
         self._perform_action(self.turnOffAction)
 
+        # Reset button to "Run" when program finishes
+        global _window
+        if _window is not None:
+            _window.play_pause_btn.config(text="▶ Run", state="disabled")
+            _window.is_paused = True
+            _window._program_finished = True
+            print("Program finished. Restart the script to run again.")
+
 
     def turnLeft(self):
         "Turn ninety degrees to the left."
+        _check_pause()  # Check pause/step before executing
         self.__pause('turnLeft')
 
         if not self.__running :
@@ -286,6 +326,7 @@ class UrRobot(_RobotSkeleton, Observable):
 
     def pickBeeper(self):
         "Pick a beeper from the current corner or fail if there are none to pick."
+        _check_pause()  # Check pause/step before executing
         self.__pause('pickBeeper')
         if not self.__running :
             raise RobotNotRunning( "Cannot pickBeeper.")
@@ -307,6 +348,7 @@ class UrRobot(_RobotSkeleton, Observable):
         
     def putBeeper(self):
         "Place a beeper on the current corner or fail if none are carried."
+        _check_pause()  # Check pause/step before executing
         self.__pause('putBeeper')
         if not self.__running :
             raise RobotNotRunning( "Cannot putBeeper.")

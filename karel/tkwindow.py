@@ -262,7 +262,7 @@ class RobotImage:
         (x, y) = self._scaler(self._street, self._avenue)
 
         # Calculate appropriate image size (65% of grid square)
-        image_size = max(10, int(self.__scaleFactor * 0.75))
+        image_size = max(10, int(self.__scaleFactor * 0.85))
 
         # Get the resized image for current direction, with greyscale if needed
         # Use semi-transparent (150/255 alpha ≈ 59%) if transparent flag is set
@@ -383,8 +383,12 @@ class KarelWindow(Frame):
         self.__right = _windowRight - _inset #770
         self.__scaleFactor = (self.__bottom - self.__top)*1.0/streets
 
-        self.is_paused = True  # Start in the paused state
-        
+        self.is_paused = True  # Start in pause mode (must click Run to start)
+        self.allow_one_step = False  # Flag for stepping one action at a time
+        self._startup_delay = 0  # No startup delay by default (user can set via startPaused)
+        self._first_action = True  # Track if this is the first robot action
+        self._program_finished = False  # Track if robot has turned off
+
         bar = Menu()        
         def endProgram(menu): exit()
         
@@ -412,7 +416,7 @@ class KarelWindow(Frame):
 
         if callback != None : # this makes the speed slider work.
 
-            from tkinter import IntVar
+            from tkinter import IntVar, Button
             self.iv = IntVar()
             self.iv.trace('r', callback)
 
@@ -420,6 +424,26 @@ class KarelWindow(Frame):
             self.scale.set(20)
             self.scale.grid(row=0, column=2, sticky="ew")
 
+            # Add Run/Pause button
+            # Start with "Run" text since we start in pause mode
+            self.play_pause_btn = Button(
+                self,
+                text="▶ Run",
+                command=self.toggle_play_pause,
+                width=10,
+                font=("Arial", 12, "bold")
+            )
+            self.play_pause_btn.grid(row=0, column=3, sticky="ew", padx=5, pady=3)
+
+            # Add Step button
+            self.step_btn = Button(
+                self,
+                text="⏭ Step",
+                command=self.step_once,
+                width=10,
+                font=("Arial", 11, "bold")
+            )
+            self.step_btn.grid(row=0, column=4, sticky="ew", padx=5, pady=3)
 
 
         #BEF TODO: make the canvas and window scaled to the actual number of streets and avenues?
@@ -436,13 +460,20 @@ class KarelWindow(Frame):
         
     def toggle_play_pause(self):
         if self.is_paused:
-            # Resume execution
+            # Resume execution (Run -> Pause)
             self.is_paused = False
-            self.play_pause_btn.config(text="Pause")
+            self.play_pause_btn.config(text="⏸ Pause")
         else:
-            # Pause execution
+            # Pause execution (Pause -> Run)
             self.is_paused = True
-            self.play_pause_btn.config(text="Play ")
+            self.play_pause_btn.config(text="▶ Run")
+
+    def step_once(self):
+        """Allow one robot action to execute, then pause again."""
+        self.allow_one_step = True
+        # Note: Do NOT change is_paused - keep it True
+        # The allow_one_step flag will allow the next action to execute
+        # Then is_paused will catch and pause again for subsequent actions
 
 
     #BEF NOTE: fix this so that we can have different streets and avenues.
