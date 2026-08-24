@@ -244,6 +244,19 @@ class UrRobot(_RobotSkeleton, Observable):
     def isRunning(self):
         return self.__running
 
+    def getStateHistory(self):
+        """Return this robot's full history as a list of RobotState snapshots, one per
+        action taken (move, turnLeft, pickBeeper, putBeeper, turnOff, setVisible,
+        setCostume), plus its initial state as entry [0]. Each RobotState exposes
+        .street(), .avenue(), .direction(), .beepers(), .action(), .isRunning(),
+        .visible(), .costume(), .id()."""
+        return self.__state_history
+
+    def getInitialState(self):
+        """Convenience for getStateHistory()[0] - this robot's state at creation, before
+        any actions were taken."""
+        return self.__state_history[0]
+
     def _update_if_graphics(self):
         "We need this method call update() directly on a _window if it's a tkinter Frame"
         global _window

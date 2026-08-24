@@ -42,8 +42,10 @@ def getStateHistory(robot):
     """Return the robot's full history as a list of RobotState snapshots, one per action
     taken (move, turnLeft, pickBeeper, putBeeper, turnOff, setVisible, setCostume), plus the
     robot's initial state as entry [0]. Each RobotState exposes .street(), .avenue(),
-    .direction(), .beepers(), .action(), .isRunning(), .visible(), .costume(), .id()."""
-    return robot._UrRobot__state_history
+    .direction(), .beepers(), .action(), .isRunning(), .visible(), .costume(), .id().
+
+    Same as calling robot.getStateHistory() directly."""
+    return robot.getStateHistory()
 
 def getInitialState(robot):
     """Convenience for getStateHistory(robot)[0] - the robot's state at creation, before
