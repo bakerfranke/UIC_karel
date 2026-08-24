@@ -170,15 +170,13 @@ class UrRobot(_RobotSkeleton, Observable):
             self.addObserver(world)
 #        world._World__registerRobot(self)
         self.setChanged()
-        self.notifyObservers(self.RobotState(self, self.createAction))
+        initial_state = self.RobotState(self, self.createAction)
+        self.notifyObservers(initial_state)
         self.__pausing = False
         self.__userPausing = False
         self.__action_count = 0
-        self.__location_list = [(street,avenue)]
+        self.__state_history = [initial_state]
 
-        # TO DO: USE ROBOT STATE OJECT TO LOG THIS
-        #self.__action_log = [_get_current_status()]
-        
 
 
     @staticmethod
@@ -210,7 +208,9 @@ class UrRobot(_RobotSkeleton, Observable):
         Observable.__init__(robot)
         robot.addObserver(world)
         robot.setChanged()
-        robot.notifyObservers(robot.RobotState(robot, robot.createAction))
+        initial_state = robot.RobotState(robot, robot.createAction)
+        robot.notifyObservers(initial_state)
+        robot.__state_history = [initial_state]  # fresh history, not shared with the original
         return robot
 
     def getID(self):
@@ -256,7 +256,9 @@ class UrRobot(_RobotSkeleton, Observable):
     def _perform_action(self, action):
         """Perform a robot action, notify observers, and update the window. Leave check if running to action methods"""
         self.setChanged()
-        self.notifyObservers(self.RobotState(self, action))
+        state = self.RobotState(self, action)
+        self.__state_history.append(state)
+        self.notifyObservers(state)
 
         # Always refresh graphics for actions with world-visible side effects (beeper
         # changes) or that reveal robot state (setVisible, turnOff/crash), even if the
@@ -276,7 +278,6 @@ class UrRobot(_RobotSkeleton, Observable):
         self.__speedCheck()
         self.__direction(self, world)
         self.__action_count += 1
-        self.__location_list.append((self.__street, self.__avenue))
         self._perform_action(self.moveAction)
   
 

@@ -38,8 +38,17 @@ def getBeepers(robot):
 def getActionCount(robot):
     return robot._UrRobot__action_count
 
-def getLocationList(robot):
-    return robot._UrRobot__location_list
+def getStateHistory(robot):
+    """Return the robot's full history as a list of RobotState snapshots, one per action
+    taken (move, turnLeft, pickBeeper, putBeeper, turnOff, setVisible, setCostume), plus the
+    robot's initial state as entry [0]. Each RobotState exposes .street(), .avenue(),
+    .direction(), .beepers(), .action(), .isRunning(), .visible(), .costume(), .id()."""
+    return robot._UrRobot__state_history
+
+def getInitialState(robot):
+    """Convenience for getStateHistory(robot)[0] - the robot's state at creation, before
+    any actions were taken. Useful for verifying a program set up its robot(s) correctly."""
+    return getStateHistory(robot)[0]
 
 def getStatus(robot):
     return (robot._UrRobot__street, 
