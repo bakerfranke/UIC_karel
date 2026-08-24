@@ -462,7 +462,19 @@ class UrRobot(_RobotSkeleton, Observable):
 
         def id(self):
             return self.__id
-        
+
+        def __repr__(self):
+            action_str = UrRobot.actions.get(self.__action, str(self.__action))
+            beepers_str = "infinity" if self.__beepers == infinity else str(self.__beepers)
+            return (
+                f"RobotState(id={self.__id}, street={self.__street}, avenue={self.__avenue}, "
+                f"direction={self.__direction.__name__}, beepers={beepers_str}, "
+                f"action={action_str!r}, running={self.__running}, visible={self.__visible}, "
+                f"costume={self.__costume!r})"
+            )
+
+        __str__ = __repr__
+
 from karel.sensorpack import _SensorPack
     
 class Robot(UrRobot, _SensorPack) :
