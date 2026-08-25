@@ -1,3 +1,8 @@
+"""Shared checks for the Bomb/Room lab exercise. Not itself a graded test file -
+test_beeper_room_start.py / _end.py / _world.py each just call one function here.
+Keeping the real logic in one place means there's only one copy of the setup/assertion
+code to maintain even though the rubric grades it as three separate point items."""
+
 from karel.robota import *
 import karel.robotutils as utils
 import karel.kareltestutils as test
@@ -6,29 +11,32 @@ EXPECTED_START = (1, 2, East, 0)   # street, avenue, direction, beepers
 EXPECTED_END = (4, 3, East, 0)     # street, avenue, direction, beepers
 
 
-def test_passed(test_feedback):
-#SETUP
+def _setup():
+    """Run the student's program once. Returns (world, boomy), or None if the import
+    failed or the robot isn't named 'boomy' - an error is already printed in that case."""
     world = UrRobot.use_graphics(False)
     world.setTrace(False)
     world.setDelay(0)
 
-    # Try to run the program and quit if it has a runtime error
     try:
         import main  # This will attempt to run the program
     except Exception as e:
-        # Provide feedback about the error
         print(f"ERROR: while importing 'main': {e}")
-        return False
+        return None
 
-    # Make sure the robot exists and is named 'boomy', per the starter code
     if not hasattr(main, 'boomy'):
         print("ERROR: The program assumes the robot is named 'boomy'.")
+        return None
+
+    return world, main.boomy
+
+
+def check_start_state(test_feedback):
+    setup = _setup()
+    if setup is None:
         return False
+    _world, boomy = setup
 
-    boomy = main.boomy
-# END SETUP
-
-    # boomy must have started at the exact prescribed location, direction, and beeper count
     start = utils.getInitialState(boomy)
     exp_street, exp_avenue, exp_direction, exp_beepers = EXPECTED_START
 
@@ -50,7 +58,16 @@ def test_passed(test_feedback):
     ):
         return False
 
-    # boomy must end at the exact prescribed location, direction, beeper count, and be off
+    test_feedback.write("Starting state correct!")
+    return True
+
+
+def check_end_state(test_feedback):
+    setup = _setup()
+    if setup is None:
+        return False
+    _world, boomy = setup
+
     end = utils.getStateHistory(boomy)[-1]
     exp_street, exp_avenue, exp_direction, exp_beepers = EXPECTED_END
 
@@ -78,9 +95,18 @@ def test_passed(test_feedback):
     ):
         return False
 
-    # The world must end with exactly one beeper, at (4, 3) - the bomb, safely in the room
+    test_feedback.write("Ending state correct!")
+    return True
+
+
+def check_world_beepers(test_feedback):
+    setup = _setup()
+    if setup is None:
+        return False
+    world, _boomy = setup
+
     if not test.testWorldEquals("World Beepers", world, "beeper_room_end.kwld"):
         return False
 
-    test_feedback.write("Woohoo!  All tests passed!")
+    test_feedback.write("World beepers correct!")
     return True
