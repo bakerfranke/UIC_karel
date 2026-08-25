@@ -32,58 +32,54 @@ def test_passed(test_feedback):
     start = utils.getInitialState(boomy)
     exp_street, exp_avenue, exp_direction, exp_beepers = EXPECTED_START
 
-    if start.street() != exp_street or start.avenue() != exp_avenue:
-        print(
-            f"ERROR: boomy should start at street {exp_street}, avenue {exp_avenue}. "
-            f"Instead started at street {start.street()}, avenue {start.avenue()}."
-        )
+    if not test.testEquals(
+        "Start Location", "boomy's starting (street, avenue)",
+        (start.street(), start.avenue()), (exp_street, exp_avenue)
+    ):
         return False
 
-    if start.direction() != exp_direction:
-        print(
-            f"ERROR: boomy should start facing {exp_direction.__name__}. "
-            f"Instead started facing {start.direction().__name__}."
-        )
+    if not test.testEquals(
+        "Start Direction", "boomy's starting direction",
+        start.direction().__name__, exp_direction.__name__
+    ):
         return False
 
-    if start.beepers() != exp_beepers:
-        print(
-            f"ERROR: boomy should start with {exp_beepers} beepers. "
-            f"Instead started with {start.beepers()}."
-        )
+    if not test.testEquals(
+        "Start Beepers", "boomy's starting beeper count",
+        start.beepers(), exp_beepers
+    ):
         return False
 
     # boomy must end at the exact prescribed location, direction, beeper count, and be off
     end = utils.getStateHistory(boomy)[-1]
     exp_street, exp_avenue, exp_direction, exp_beepers = EXPECTED_END
 
-    if end.street() != exp_street or end.avenue() != exp_avenue:
-        print(
-            f"ERROR: boomy should end at street {exp_street}, avenue {exp_avenue}. "
-            f"Instead ended at street {end.street()}, avenue {end.avenue()}."
-        )
+    if not test.testEquals(
+        "End Location", "boomy's ending (street, avenue)",
+        (end.street(), end.avenue()), (exp_street, exp_avenue)
+    ):
         return False
 
-    if end.direction() != exp_direction:
-        print(
-            f"ERROR: boomy should end facing {exp_direction.__name__}. "
-            f"Instead ended facing {end.direction().__name__}."
-        )
+    if not test.testEquals(
+        "End Direction", "boomy's ending direction",
+        end.direction().__name__, exp_direction.__name__
+    ):
         return False
 
-    if end.beepers() != exp_beepers:
-        print(
-            f"ERROR: boomy should end with {exp_beepers} beepers in the beeper bag. "
-            f"Instead ended with {end.beepers()}."
-        )
+    if not test.testEquals(
+        "End Beepers", "boomy's ending beeper count (in the beeper bag)",
+        end.beepers(), exp_beepers
+    ):
         return False
 
-    if end.isRunning():
-        print("ERROR: boomy should be turned off (call boomy.turnOff()) at the end of the program.")
+    if not test.testEquals(
+        "Turned Off", "boomy should be turned off (call boomy.turnOff()) by the end",
+        end.isRunning(), False
+    ):
         return False
 
     # The world must end with exactly one beeper, at (4, 3) - the bomb, safely in the room
-    if not test.testWorldEquals("Test: the bomb ends up in the room", world, "beeper_room_end.kwld"):
+    if not test.testWorldEquals("World Beepers", world, "beeper_room_end.kwld"):
         return False
 
     test_feedback.write("Woohoo!  All tests passed!")
