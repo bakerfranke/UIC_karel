@@ -14,6 +14,7 @@ from tkinter import Menu
 from tkinter import Text
 from tkinter import Scrollbar
 import os
+import re
 
 try:
     from PIL import Image, ImageTk
@@ -563,6 +564,7 @@ class KarelWindow(Frame):
         # blow out the layout or push the toggle button off the fixed-size window.
         self.statsTrayOpen = False
         self._statsFontSize = 18  # adjustable live via the -/+ buttons below
+        self._trayReservedWidth = 0  # how much extra window width is currently reserved for the tray
 
         # Starting guess (20 chars, matching getStatsText()'s widest line as of this
         # writing) for before any real stats text has loaded - self-corrects to the
@@ -719,12 +721,32 @@ class KarelWindow(Frame):
             self.stats_frame.grid_remove()
             self.stats_btn.config(text="\U0001F4CA>>")
             self.statsTrayOpen = False
+            self._growWindowForTray(0)  # give the reserved width back
         else:
             self.stats_frame.grid(row=1, column=7, sticky="ns", padx=(5, 0))
             self.stats_btn.config(text="<<\U0001F4CA")
             self.statsTrayOpen = True
             from karel.tkworldadapter import world
-            self.updateStatsText(world.getStatsText())
+            self.updateStatsText(world.getStatsText())  # also grows the window - see _resizeStatsFrameToFit
+
+    def _growWindowForTray(self, trayWidth):
+        """Grow (or shrink) the actual window by however much the tray's reserved width
+        changed, instead of relying on the canvas having spare room to give up. That
+        approach (canvas shrinks to make room) only works once the window is already
+        wide enough - if the canvas is already at its minimum size (root.minsize()),
+        there's nothing left to give, and the tray ends up under-sized until the window
+        is manually resized."""
+        delta = trayWidth - self._trayReservedWidth
+        if delta == 0:
+            return
+        root = self.__root
+        root.update_idletasks()
+        match = re.match(r'(\d+)x(\d+)([+-]\d+[+-]\d+)', root.geometry())
+        if not match:
+            return
+        w, h, pos = int(match.group(1)), int(match.group(2)), match.group(3)
+        root.geometry(f"{max(500, w + delta)}x{h}{pos}")
+        self._trayReservedWidth = trayWidth
 
     def _shrinkStatsFont(self):
         self._statsFontSize = max(8, self._statsFontSize - 2)
@@ -747,7 +769,11 @@ class KarelWindow(Frame):
         scrollbarAndPadding = 28  # room for the scrollbar plus the Text widget's own padx
         # +1 char of slack: Text widget line-wrapping measures slightly differently than
         # Font.measure() does, so a truly tight fit could still wrap by a character.
-        self.stats_frame.config(width=(maxChars + 1) * charWidth + scrollbarAndPadding)
+        newWidth = (maxChars + 1) * charWidth + scrollbarAndPadding
+        self.stats_frame.config(width=newWidth)
+
+        if self.statsTrayOpen:
+            self._growWindowForTray(newWidth)
 
     def updateStatsText(self, text):
         """Replace the stats tray's content. Caller (RobotWorld) should only call this
