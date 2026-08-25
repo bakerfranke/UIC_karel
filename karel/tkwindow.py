@@ -557,7 +557,7 @@ class KarelWindow(Frame):
         # writing) for before any real stats text has loaded - self-corrects to the
         # actual content's width the first time the tray opens. See _resizeStatsFrameToFit.
         _initialCharWidth = Font(family="Courier", size=self._statsFontSize).measure('0')
-        self.stats_frame = Frame(self, width=20 * _initialCharWidth + 28, bg=self.cget('bg'))
+        self.stats_frame = Frame(self, width=21 * _initialCharWidth + 28, bg=self.cget('bg'))
         self.stats_frame.pack_propagate(False)
 
         self.stats_header = Label(
@@ -568,7 +568,7 @@ class KarelWindow(Frame):
 
         stats_toolbar = Frame(self.stats_frame, bg=self.cget('bg'))
         stats_toolbar.pack(side="top", fill="x", pady=(2, 4))
-        Label(stats_toolbar, text="Font:", font=("Arial", 12), bg=self.cget('bg')).pack(side="left", padx=(6, 2))
+        Label(stats_toolbar, text=f"Font:", font=("Arial", 12), bg=self.cget('bg')).pack(side="left", padx=(6, 2))
         Button(stats_toolbar, text="-", command=self._shrinkStatsFont, width=2, font=("Arial", 12, "bold")).pack(side="left")
         Button(stats_toolbar, text="+", command=self._growStatsFont, width=2, font=("Arial", 12, "bold")).pack(side="left", padx=(2, 0))
 
@@ -734,7 +734,9 @@ class KarelWindow(Frame):
         maxChars = max((len(line) for line in sampleText.split('\n')), default=20)
         charWidth = Font(family="Courier", size=self._statsFontSize).measure('0')
         scrollbarAndPadding = 28  # room for the scrollbar plus the Text widget's own padx
-        self.stats_frame.config(width=maxChars * charWidth + scrollbarAndPadding)
+        # +1 char of slack: Text widget line-wrapping measures slightly differently than
+        # Font.measure() does, so a truly tight fit could still wrap by a character.
+        self.stats_frame.config(width=(maxChars + 1) * charWidth + scrollbarAndPadding)
 
     def updateStatsText(self, text):
         """Replace the stats tray's content. Caller (RobotWorld) should only call this
