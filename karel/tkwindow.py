@@ -11,6 +11,7 @@ from tkinter import Canvas
 from tkinter import Scale
 from tkinter import IntVar
 from tkinter import Menu
+from tkinter import Text
 import os
 
 try:
@@ -533,6 +534,25 @@ class KarelWindow(Frame):
             )
             self.restart_btn.grid(row=0, column=2, sticky="ew", padx=5, pady=3)
 
+            # Stats tray toggle - column 7, to the right of everything else. Square icon
+            # button, no text needed to keep it small; the arrows hint at which way it slides.
+            self.stats_btn = Button(
+                self,
+                text="\U0001F4CA>>",
+                command=self.toggleStatsTray,
+                width=4,
+                font=("Arial", 11, "bold")
+            )
+            self.stats_btn.grid(row=0, column=7, sticky="ne", padx=(5, 0), pady=3)
+
+        # Stats tray - hidden by default, column 7 (own column, doesn't touch the canvas's
+        # columns 0-6 at all). A plain read-only Text widget so world.printStats()-style
+        # content can just be dropped in verbatim.
+        self.statsTrayOpen = False
+        self.stats_text = Text(
+            self, width=22, font=("Courier", 10), state="disabled",
+            bg=self.cget('bg'), relief="flat", padx=6, pady=4
+        )
 
         #BEF TODO: make the canvas and window scaled to the actual number of streets and avenues?
         self._canvas = Canvas(self, height = _windowBottom, width = _windowRight, bg = 'white')
@@ -647,6 +667,29 @@ class KarelWindow(Frame):
     def clearCrashMessage(self):
         self._crashed = False
         self.showPausedStatus() if self.is_paused else self.showRunningStatus()
+
+    def toggleStatsTray(self):
+        """Show/hide the stats sidebar. Only fetches/renders stats text while opening -
+        while closed, world/robot action counting still happens (cheap counter increments)
+        but nothing gets formatted or drawn."""
+        if self.statsTrayOpen:
+            self.stats_text.grid_remove()
+            self.stats_btn.config(text="\U0001F4CA>>")
+            self.statsTrayOpen = False
+        else:
+            self.stats_text.grid(row=1, column=7, sticky="ns", padx=(5, 0))
+            self.stats_btn.config(text="<<\U0001F4CA")
+            self.statsTrayOpen = True
+            from karel.tkworldadapter import world
+            self.updateStatsText(world.getStatsText())
+
+    def updateStatsText(self, text):
+        """Replace the stats tray's content. Caller (RobotWorld) should only call this
+        while the tray is actually open - see statsTrayOpen."""
+        self.stats_text.config(state="normal")
+        self.stats_text.delete("1.0", "end")
+        self.stats_text.insert("1.0", text)
+        self.stats_text.config(state="disabled")
 
     def step_once(self):
         """Allow one robot action to execute, then pause again."""

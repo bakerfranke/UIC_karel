@@ -96,6 +96,10 @@ class RobotWorld(RobotWorldBase, Observer) :
         """No-op in headless mode - the Run/Pause/Step controls only exist when graphics are on."""
         pass
 
+    def printStats(self):
+        """No-op in headless mode - stats tracking is tied to the graphics window."""
+        pass
+
     def update(self, robot, robotState = None):
         "This is called whenever any robot changes state since the world observes all robots"
         if robotState == None :

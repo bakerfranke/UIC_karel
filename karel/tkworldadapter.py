@@ -61,6 +61,17 @@ class RobotWorld(RobotWorldBase, Observer) :
         print("Creating", name)
         self.trace_enabled = False
 
+        # Stats tray bookkeeping - a plain per-robot action tally, kept in the same spot
+        # the trace-print logic already observes every action from. Counting itself is
+        # O(1) per action regardless of whether the tray is open; only formatting/drawing
+        # is skipped while it's closed (see _updateStatsIfOpen).
+        self._actionCounts = {}   # robot.ID() -> {actionCode: count}
+        self._latestRobotState = {}  # robot.ID() -> most recent RobotState
+        self._robotOrder = []     # robot.ID()s in creation order, for stable display
+        self._robotCostume = {}   # robot.ID() -> resolved costume (never None, unlike
+                                   # RobotState.costume() which is None until setCostume()
+                                   # is called explicitly)
+
     # ADDED BY BAKER 1.8.24
     def setTrace(self, enabled: bool):
         """Enable or disable global trace output for all robots."""
@@ -172,7 +183,11 @@ class RobotWorld(RobotWorldBase, Observer) :
 
         else :
             pass
-        
+
+        # Stats tray bookkeeping - counts robot actions and tracks each robot's latest
+        # state, observing the exact same per-action data the trace-print below does.
+        self._trackStats(robot, robotState, action)
+
         #if hasattr(self, "trace_enabled") and self.trace_enabled:
         if self.trace_enabled:
 
@@ -181,7 +196,78 @@ class RobotWorld(RobotWorldBase, Observer) :
                 f"TRACE: Robot {robot.ID()} at ({robotState.street()}, {robotState.avenue()}) facing {robotState.direction().__name__} "
                 f"with {robotState.beepers()} beeper(s), action: {UrRobot.actions[robotState.action()]}, {robotState.isRunning()}"
             )
-            
+
+    def _trackStats(self, robot, robotState, action):
+        """O(1) per action regardless of whether the stats tray is open - only the
+        formatting/redraw in getStatsText()/updateStatsText() is skipped while it's closed."""
+        robotID = robot.ID()
+
+        if action == karel.robota.UrRobot.createAction:
+            self._actionCounts[robotID] = {
+                karel.robota.UrRobot.moveAction: 0,
+                karel.robota.UrRobot.turnLeftAction: 0,
+                karel.robota.UrRobot.pickBeeperAction: 0,
+                karel.robota.UrRobot.putBeeperAction: 0,
+            }
+            self._robotOrder.append(robotID)
+            if robot in self.__gRobots:
+                self._robotCostume[robotID] = self.__gRobots[robot]._costume
+        elif robotID in self._actionCounts and action in self._actionCounts[robotID]:
+            self._actionCounts[robotID][action] += 1
+
+        self._latestRobotState[robotID] = robotState
+
+        if _window is not None and getattr(_window, 'statsTrayOpen', False):
+            _window.updateStatsText(self.getStatsText())
+
+    def getStatsText(self):
+        """Build the stats text - world size/beepers, then each robot's location,
+        direction, beeper count, and action tallies, in creation order. Used by both the
+        stats tray and printStats(), so they can never drift out of sync."""
+        size = self.getSize()
+        lines = [
+            f"World: {size['streets']}x{size['avenues']}",
+            f"Beepers: {self.getTotalBeeperCount()}",
+        ]
+
+        UrRobot = karel.robota.UrRobot
+        countedActions = (
+            ("move", UrRobot.moveAction),
+            ("turnLeft", UrRobot.turnLeftAction),
+            ("pickBeeper", UrRobot.pickBeeperAction),
+            ("putBeeper", UrRobot.putBeeperAction),
+        )
+
+        for robotID in self._robotOrder:
+            state = self._latestRobotState.get(robotID)
+            if state is None:
+                continue
+            counts = self._actionCounts.get(robotID, {})
+            costume = self._robotCostume.get(robotID, "karel")
+
+            lines.append("-" * 18)
+
+            dirChar = state.direction().__name__[0]
+            beepers = state.beepers()
+            beepersStr = "inf" if beepers == infinity else f"{beepers:03d}"
+            lines.append(
+                f"#{robotID} {costume} {state.street():02d} {state.avenue():02d} "
+                f"{dirChar} {beepersStr}"
+            )
+
+            total = 0
+            for label, code in countedActions:
+                count = counts.get(code, 0)
+                total += count
+                lines.append(f"{label:>12}: {count:>4}")
+            lines.append(f"{'Total':>12}: {total:>4}")
+
+        return "\n".join(lines)
+
+    def printStats(self):
+        """Print the same info shown in the graphics window's stats tray to the console."""
+        print(self.getStatsText())
+
     def name(self):
         "Return the name of this world"
         return self._name
