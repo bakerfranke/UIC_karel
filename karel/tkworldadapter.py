@@ -164,6 +164,10 @@ class RobotWorld(RobotWorldBase, Observer) :
             if _window is not None and robot in self.__gRobots:
                 self.__gRobots[robot].setCostume(robotState.costume())
 
+        elif action == karel.robota.UrRobot.crashAction:
+            if _window is not None and robot in self.__gRobots:
+                self.__gRobots[robot].crashOut()
+
         else :
             pass
         

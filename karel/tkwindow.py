@@ -49,6 +49,8 @@ class RobotImage:
     _alphaPhotoImages = {}  # Cache for semi-transparent versions
     _scaleFactor = 1.0   # Current scale factor for the window
     _defaultCostume = 'karel'  # Default costume (can be changed via world.setRobotCostume)
+    _crashPilImage = None       # The loaded crash.png, before resizing
+    _crashPhotoCache = {}       # Resized crash PhotoImages, keyed by size
 
     @classmethod
     def _loadImages(cls, costume="karel", image_dir="robot_images"):
@@ -155,6 +157,42 @@ class RobotImage:
 
         return cache_dict.get(cache_key)
 
+    @classmethod
+    def _loadCrashImage(cls, image_dir="robot_images"):
+        """Preload crash.png (shown when a robot performs an illegal action), same
+        local-folder-then-library-folder lookup as costume images. Unlike costumes this
+        is a single static image, not one per direction."""
+        if cls._crashPilImage is not None or not PIL_AVAILABLE:
+            return
+
+        local_path = os.path.join(os.getcwd(), image_dir, "crash.png")
+        karel_dir = os.path.dirname(os.path.abspath(__file__))
+        library_path = os.path.join(karel_dir, image_dir, "crash.png")
+
+        path = local_path if os.path.exists(local_path) else (
+            library_path if os.path.exists(library_path) else None)
+
+        if path:
+            try:
+                cls._crashPilImage = Image.open(path)
+                print(f"Loaded crash image: {path}")
+            except Exception as e:
+                print(f"Error loading crash.png from {path}: {e}")
+        else:
+            print("Warning: Could not find crash.png in local or library robot_images folder")
+
+    @classmethod
+    def _getCrashImage(cls, size):
+        """Get a resized PhotoImage of the crash image at the given size."""
+        if not PIL_AVAILABLE or cls._crashPilImage is None:
+            return None
+        if size not in cls._crashPhotoCache:
+            resized = cls._crashPilImage.resize((size, size), Image.Resampling.LANCZOS)
+            if resized.mode != 'RGBA':
+                resized = resized.convert('RGBA')
+            cls._crashPhotoCache[size] = ImageTk.PhotoImage(resized)
+        return cls._crashPhotoCache[size]
+
     def __init__(self, street, avenue, direction, window, fill='blue', outline='black', costume=None):
         self._canvas = window._canvas
         self._street = street
@@ -181,6 +219,7 @@ class RobotImage:
         self._y = 0
         self._isGreyed = False  # Track greyed-out state
         self._isTransparent = False  # Track if robot should be semi-transparent (for visibility over beepers)
+        self._isCrashed = False  # Track whether this robot crashed (illegal action)
         self.__buildImage()
         
 
@@ -196,6 +235,14 @@ class RobotImage:
         if self._canvas:
             self._canvas.delete(self.tag)
         # Redraw with greyscale and transparency
+        self.__buildImage()
+
+    def crashOut(self):
+        """Show the crash image - a robot performed an illegal action (hit a wall,
+        picked up a beeper that wasn't there, or put down a beeper it didn't have)."""
+        self._isCrashed = True
+        if self._canvas:
+            self._canvas.delete(self.tag)
         self.__buildImage()
 
     def setTransparent(self, transparent):
@@ -272,10 +319,14 @@ class RobotImage:
         # Calculate appropriate image size (65% of grid square)
         image_size = max(10, int(self.__scaleFactor * 0.85))
 
-        # Get the resized image for current direction, with greyscale if needed
-        # Use semi-transparent (150/255 alpha ≈ 59%) if transparent flag is set
-        alpha = 150 if self._isTransparent else None
-        if PIL_AVAILABLE:
+        if self._isCrashed:
+            # Illegal action - show the crash image instead of the normal costume,
+            # regardless of direction/greyed/transparent state.
+            image = RobotImage._getCrashImage(image_size)
+        elif PIL_AVAILABLE:
+            # Get the resized image for current direction, with greyscale if needed
+            # Use semi-transparent (150/255 alpha ≈ 59%) if transparent flag is set
+            alpha = 150 if self._isTransparent else None
             image = RobotImage._getResizedImage(self._costume, self._direction, image_size, greyscale=self._isGreyed, alpha=alpha)
         else:
             image = RobotImage._photoImages.get(self._costume, {}).get(self._direction)
@@ -397,6 +448,7 @@ class KarelWindow(Frame):
         self._first_action = True  # Track if this is the first robot action
         self._program_finished = False  # Track if robot has turned off
         self._pauseOverlayRect = None  # Draggable "Paused" banner, created on demand
+        RobotImage._loadCrashImage()  # Preload crash.png now so there's no lag when a robot actually crashes
 
         bar = Menu()        
         def endProgram(menu): exit()
@@ -428,8 +480,13 @@ class KarelWindow(Frame):
         speedLabel = Label(self, text = "Speed")
         speedLabel.grid(row=0, column=4, sticky="es") #added params from chatgpt
 
-        #|   0   |  1   |    2     |   3    |   4   |   5   |   6    |
-        #|  RUN  | STEP | RESTART  | EMPTY  |  LBL  | SLID  | EMPTY  |
+        # Crash/error banner - blank normally, filled in by showCrashMessage() so a crash
+        # or any uncaught error is obvious without having to tab over to the console.
+        self.crash_label = Label(self, text="", fg="#c0392b", font=("Arial", 11, "bold"))
+        self.crash_label.grid(row=0, column=3)
+
+        #|   0   |  1   |    2     |     3      |   4   |   5   |   6    |
+        #|  RUN  | STEP | RESTART  | CRASH MSG  |  LBL  | SLID  | EMPTY  |
 
         if callback != None : # this makes the speed slider work.
 
@@ -565,6 +622,14 @@ class KarelWindow(Frame):
         dy = event.y - self._pauseOverlayDragOrigin[1]
         self._canvas.move('pauseOverlay', dx, dy)
         self._pauseOverlayDragOrigin = (event.x, event.y)
+
+    def showCrashMessage(self, message="⚠ Program crashed - check the console"):
+        """Show a persistent message in the toolbar - no popup, no extra click - so a
+        crash or uncaught error is obvious even though the console isn't visible."""
+        self.crash_label.config(text=message)
+
+    def clearCrashMessage(self):
+        self.crash_label.config(text="")
 
     def step_once(self):
         """Allow one robot action to execute, then pause again."""

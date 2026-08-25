@@ -47,6 +47,31 @@ except (ImportError, ModuleNotFoundError):
 _window = None
 __robotCount = -1
 
+# Show "check the console" in the toolbar for ANY uncaught error - not just illegal
+# Karel actions (those already show the crash image via UrRobot._crashOut()). Students
+# have to toggle away from the graphics window to see the console, so an uncaught error
+# otherwise just looks like the program silently stopped. Installed unconditionally at
+# import time (rather than lazily alongside window creation) since world.setSize() - the
+# very first call in almost every program - already creates _window on its own, before
+# any robot-creation-triggered lazy init would ever run. The traceback still prints
+# normally; this only adds the toolbar message.
+def _karel_excepthook(exc_type, exc_value, exc_tb):
+    # robota._window only gets synced to the real window once the first robot is
+    # created (via _initialize_graphics()). If the error happens after world.setSize()
+    # but before any robot exists, fall back to tkworldadapter's own _window directly.
+    win = _window
+    if win is None:
+        try:
+            from karel.tkworldadapter import _window as tw_window
+            win = tw_window
+        except ImportError:
+            pass
+    if win is not None and hasattr(win, 'showCrashMessage'):
+        win.showCrashMessage()
+    sys.__excepthook__(exc_type, exc_value, exc_tb)
+
+sys.excepthook = _karel_excepthook
+
 def _incrementRobotCount() :
     global __robotCount
     __robotCount += 1
@@ -131,6 +156,7 @@ class UrRobot(_RobotSkeleton, Observable):
     createAction = 5
     setVisibleAction = 6
     setCostumeAction = 7
+    crashAction = 8
 
     # a simple dictionary to get the string for the int code
     actions = {
@@ -141,7 +167,8 @@ class UrRobot(_RobotSkeleton, Observable):
         4: "turnOff()",
         5: "New Robot Created",
         6: "Robot Visibility Changed",
-        7: "Robot Costume Changed"
+        7: "Robot Costume Changed",
+        8: "CRASHED"
     }
     
     def __init__(self, street, avenue, direction, beepers, fill = 'yellow', outline = 'black', visible=True, costume=None):
@@ -276,7 +303,7 @@ class UrRobot(_RobotSkeleton, Observable):
         # Always refresh graphics for actions with world-visible side effects (beeper
         # changes) or that reveal robot state (setVisible, turnOff/crash), even if the
         # robot itself is currently invisible - only pure movement stays gated on visibility.
-        _alwaysRefresh = (self.setVisibleAction, self.setCostumeAction, self.pickBeeperAction, self.putBeeperAction, self.turnOffAction)
+        _alwaysRefresh = (self.setVisibleAction, self.setCostumeAction, self.pickBeeperAction, self.putBeeperAction, self.turnOffAction, self.crashAction)
         if action in _alwaysRefresh or self.__visible:
             self._update_if_graphics()
 
@@ -289,7 +316,11 @@ class UrRobot(_RobotSkeleton, Observable):
         if not self.__running :
             raise RobotNotRunning("Cannot move.")
         self.__speedCheck()
-        self.__direction(self, world)
+        try:
+            self.__direction(self, world)
+        except FrontIsBlocked as e:
+            self._crashOut(str(e))
+            raise
         self.__action_count += 1
         self._perform_action(self.moveAction)
   
@@ -325,6 +356,27 @@ class UrRobot(_RobotSkeleton, Observable):
             _window.is_paused = True
             _window._program_finished = True
             print("Program finished. Restart the script to run again.")
+
+    def _crashOut(self, reason):
+        """Internal: mark this robot as crashed after an illegal action (hit a wall,
+        tried to pick up a beeper that wasn't there, or tried to put down a beeper it
+        didn't have). Shows the crash image and a 'check the console' message in the
+        toolbar, in addition to whatever exception the caller is about to raise."""
+        self.__running = False
+        self.__action_count += 1
+        print(
+            f"CRASH: Robot {self.__ID} crashed at ({self.__street}, {self.__avenue}) "
+            f"facing {self.__direction.__name__}: {reason}"
+        )
+        self._perform_action(self.crashAction)
+
+        global _window
+        if _window is not None and hasattr(_window, 'showCrashMessage'):
+            _window.showCrashMessage()
+        if _window is not None and hasattr(_window, 'play_pause_btn'):
+            _window.play_pause_btn.config(text="▶ Run", state="disabled")
+            _window.is_paused = True
+            _window._program_finished = True
 
 
     def turnLeft(self):
@@ -365,10 +417,8 @@ class UrRobot(_RobotSkeleton, Observable):
             self.__action_count += 1
             self._perform_action(self.pickBeeperAction)
 
-        except NoBeepers as data : 
-            self.turnOff()
-            self.setChanged()
-            print (str(data))
+        except NoBeepers as data :
+            self._crashOut(str(data))
             raise Exception("Failed to Pick Beeper")
 
         
@@ -389,9 +439,7 @@ class UrRobot(_RobotSkeleton, Observable):
             self.__action_count += 1
             world.placeBeepers(self.__street, self.__avenue, 1)
         else :
-            #self.turnOff()
-            #self.setChanged()
-            #self.notifyObservers(self.RobotState(self, self.putBeeperAction))
+            self._crashOut("no beepers in beeper bag")
             raise NoBeepersInBeeperBag()
 
         self._perform_action(self.putBeeperAction)
