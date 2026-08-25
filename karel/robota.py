@@ -348,15 +348,6 @@ class UrRobot(_RobotSkeleton, Observable):
 
         self._perform_action(self.turnOffAction)
 
-        # Reset button to "Run" when program finishes (graphics mode only - the headless
-        # stand-in _window uses in place of a real KarelWindow has no button to reset)
-        global _window
-        if _window is not None and hasattr(_window, 'play_pause_btn'):
-            _window.play_pause_btn.config(text="▶ Run", state="disabled")
-            _window.is_paused = True
-            _window._program_finished = True
-            print("Program finished. Restart the script to run again.")
-
     def _crashOut(self, reason):
         """Internal: mark this robot as crashed after an illegal action (hit a wall,
         tried to pick up a beeper that wasn't there, or tried to put down a beeper it

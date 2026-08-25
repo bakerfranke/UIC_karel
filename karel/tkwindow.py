@@ -480,13 +480,16 @@ class KarelWindow(Frame):
         speedLabel = Label(self, text = "Speed")
         speedLabel.grid(row=0, column=4, sticky="es") #added params from chatgpt
 
-        # Crash/error banner - blank normally, filled in by showCrashMessage() so a crash
-        # or any uncaught error is obvious without having to tab over to the console.
-        self.crash_label = Label(self, text="", fg="#c0392b", font=("Arial", 11, "bold"))
-        self.crash_label.grid(row=0, column=3)
+        # Status banner - shows Running/Paused normally, and a crash or any uncaught error
+        # (with an attention-grabbing red background) so it's obvious without having to
+        # tab over to the console.
+        self.status_label = Label(self, text="", font=("Arial", 11, "bold"), padx=6)
+        self.status_label.grid(row=0, column=3)
+        self._crashed = False  # once True, status stays on the crash message
+        (self.showPausedStatus if self.is_paused else self.showRunningStatus)()
 
         #|   0   |  1   |    2     |     3      |   4   |   5   |   6    |
-        #|  RUN  | STEP | RESTART  | CRASH MSG  |  LBL  | SLID  | EMPTY  |
+        #|  RUN  | STEP | RESTART  |  STATUS    |  LBL  | SLID  | EMPTY  |
 
         if callback != None : # this makes the speed slider work.
 
@@ -555,11 +558,13 @@ class KarelWindow(Frame):
             self.is_paused = False
             self.play_pause_btn.config(text="⏸ Pause")
             self.hidePausedOverlay()
+            self.showRunningStatus()
         else:
             # Pause execution (Pause -> Run)
             self.is_paused = True
             self.play_pause_btn.config(text="▶ Run")
             self.showPausedOverlay()
+            self.showPausedStatus()
 
     def showPausedOverlay(self):
         """Show a draggable, semi-transparent 'Paused' banner over the middle of the grid."""
@@ -623,13 +628,25 @@ class KarelWindow(Frame):
         self._canvas.move('pauseOverlay', dx, dy)
         self._pauseOverlayDragOrigin = (event.x, event.y)
 
+    def showRunningStatus(self):
+        if self._crashed:
+            return  # crash message takes priority and stays until the program restarts
+        self.status_label.config(text="▶ Running", fg="#2e7d32", bg=self.cget('bg'))
+
+    def showPausedStatus(self):
+        if self._crashed:
+            return
+        self.status_label.config(text="⏸ Paused", fg="#b8860b", bg=self.cget('bg'))
+
     def showCrashMessage(self, message="⚠ Program crashed - check the console"):
         """Show a persistent message in the toolbar - no popup, no extra click - so a
         crash or uncaught error is obvious even though the console isn't visible."""
-        self.crash_label.config(text=message)
+        self._crashed = True
+        self.status_label.config(text=message, fg="white", bg="#c0392b")
 
     def clearCrashMessage(self):
-        self.crash_label.config(text="")
+        self._crashed = False
+        self.showPausedStatus() if self.is_paused else self.showRunningStatus()
 
     def step_once(self):
         """Allow one robot action to execute, then pause again."""
