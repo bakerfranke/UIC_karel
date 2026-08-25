@@ -551,9 +551,13 @@ class KarelWindow(Frame):
         # char-width * font-size) via pack_propagate(False), so the +/- font buttons can't
         # blow out the layout or push the toggle button off the fixed-size window.
         self.statsTrayOpen = False
-        self._statsFontSize = 20  # adjustable live via the -/+ buttons below
+        self._statsFontSize = 18  # adjustable live via the -/+ buttons below
 
-        self.stats_frame = Frame(self, width=260, bg=self.cget('bg'))
+        # Starting guess (20 chars, matching getStatsText()'s widest line as of this
+        # writing) for before any real stats text has loaded - self-corrects to the
+        # actual content's width the first time the tray opens. See _resizeStatsFrameToFit.
+        _initialCharWidth = Font(family="Courier", size=self._statsFontSize).measure('0')
+        self.stats_frame = Frame(self, width=20 * _initialCharWidth + 28, bg=self.cget('bg'))
         self.stats_frame.pack_propagate(False)
 
         self.stats_header = Label(
@@ -564,9 +568,9 @@ class KarelWindow(Frame):
 
         stats_toolbar = Frame(self.stats_frame, bg=self.cget('bg'))
         stats_toolbar.pack(side="top", fill="x", pady=(2, 4))
-        Label(stats_toolbar, text="Font size:", font=("Arial", 9), bg=self.cget('bg')).pack(side="left", padx=(6, 2))
-        Button(stats_toolbar, text="-", command=self._shrinkStatsFont, width=2, font=("Arial", 9, "bold")).pack(side="left")
-        Button(stats_toolbar, text="+", command=self._growStatsFont, width=2, font=("Arial", 9, "bold")).pack(side="left", padx=(2, 0))
+        Label(stats_toolbar, text="Font:", font=("Arial", 12), bg=self.cget('bg')).pack(side="left", padx=(6, 2))
+        Button(stats_toolbar, text="-", command=self._shrinkStatsFont, width=2, font=("Arial", 12, "bold")).pack(side="left")
+        Button(stats_toolbar, text="+", command=self._growStatsFont, width=2, font=("Arial", 12, "bold")).pack(side="left", padx=(2, 0))
 
         stats_body = Frame(self.stats_frame)
         stats_body.pack(side="top", fill="both", expand=True)
@@ -714,10 +718,23 @@ class KarelWindow(Frame):
     def _shrinkStatsFont(self):
         self._statsFontSize = max(8, self._statsFontSize - 2)
         self.stats_text.config(font=("Courier", self._statsFontSize))
+        self._resizeStatsFrameToFit()
 
     def _growStatsFont(self):
         self._statsFontSize = min(32, self._statsFontSize + 2)
         self.stats_text.config(font=("Courier", self._statsFontSize))
+        self._resizeStatsFrameToFit()
+
+    def _resizeStatsFrameToFit(self, sampleText=None):
+        """Size the tray to a tight fit around its widest line at the current font size,
+        using the font's actual measured character width (not a guessed px-per-char
+        ratio) so it comes out exact regardless of OS/font rendering differences."""
+        if sampleText is None:
+            sampleText = self.stats_text.get('1.0', 'end')
+        maxChars = max((len(line) for line in sampleText.split('\n')), default=20)
+        charWidth = Font(family="Courier", size=self._statsFontSize).measure('0')
+        scrollbarAndPadding = 28  # room for the scrollbar plus the Text widget's own padx
+        self.stats_frame.config(width=maxChars * charWidth + scrollbarAndPadding)
 
     def updateStatsText(self, text):
         """Replace the stats tray's content. Caller (RobotWorld) should only call this
@@ -726,6 +743,7 @@ class KarelWindow(Frame):
         self.stats_text.delete("1.0", "end")
         self.stats_text.insert("1.0", text)
         self.stats_text.config(state="disabled")
+        self._resizeStatsFrameToFit(text)
 
     def step_once(self):
         """Allow one robot action to execute, then pause again."""
