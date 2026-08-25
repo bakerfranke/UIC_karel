@@ -12,6 +12,7 @@ from tkinter import Scale
 from tkinter import IntVar
 from tkinter import Menu
 from tkinter import Text
+from tkinter import Scrollbar
 import os
 
 try:
@@ -546,13 +547,40 @@ class KarelWindow(Frame):
             self.stats_btn.grid(row=0, column=7, sticky="ne", padx=(5, 0), pady=3)
 
         # Stats tray - hidden by default, column 7 (own column, doesn't touch the canvas's
-        # columns 0-6 at all). A plain read-only Text widget so world.printStats()-style
-        # content can just be dropped in verbatim.
+        # columns 0-6 at all). Fixed pixel footprint (not derived from the Text widget's
+        # char-width * font-size) via pack_propagate(False), so the +/- font buttons can't
+        # blow out the layout or push the toggle button off the fixed-size window.
         self.statsTrayOpen = False
-        self.stats_text = Text(
-            self, width=22, font=("Courier", 10), state="disabled",
-            bg=self.cget('bg'), relief="flat", padx=6, pady=4
+        self._statsFontSize = 20  # adjustable live via the -/+ buttons below
+
+        self.stats_frame = Frame(self, width=260, bg=self.cget('bg'))
+        self.stats_frame.pack_propagate(False)
+
+        self.stats_header = Label(
+            self.stats_frame, text="Karel World Stats", font=("Arial", 11, "bold"),
+            bg=self.cget('bg')
         )
+        self.stats_header.pack(side="top", fill="x", pady=(4, 0))
+
+        stats_toolbar = Frame(self.stats_frame, bg=self.cget('bg'))
+        stats_toolbar.pack(side="top", fill="x", pady=(2, 4))
+        Label(stats_toolbar, text="Font size:", font=("Arial", 9), bg=self.cget('bg')).pack(side="left", padx=(6, 2))
+        Button(stats_toolbar, text="-", command=self._shrinkStatsFont, width=2, font=("Arial", 9, "bold")).pack(side="left")
+        Button(stats_toolbar, text="+", command=self._growStatsFont, width=2, font=("Arial", 9, "bold")).pack(side="left", padx=(2, 0))
+
+        stats_body = Frame(self.stats_frame)
+        stats_body.pack(side="top", fill="both", expand=True)
+
+        stats_scrollbar = Scrollbar(stats_body)
+        stats_scrollbar.pack(side="right", fill="y")
+
+        self.stats_text = Text(
+            stats_body, width=25, font=("Courier", self._statsFontSize), state="disabled",
+            bg=self.cget('bg'), relief="flat", padx=6, pady=4,
+            yscrollcommand=stats_scrollbar.set
+        )
+        self.stats_text.pack(side="left", fill="both", expand=True)
+        stats_scrollbar.config(command=self.stats_text.yview)
 
         #BEF TODO: make the canvas and window scaled to the actual number of streets and avenues?
         self._canvas = Canvas(self, height = _windowBottom, width = _windowRight, bg = 'white')
@@ -673,15 +701,23 @@ class KarelWindow(Frame):
         while closed, world/robot action counting still happens (cheap counter increments)
         but nothing gets formatted or drawn."""
         if self.statsTrayOpen:
-            self.stats_text.grid_remove()
+            self.stats_frame.grid_remove()
             self.stats_btn.config(text="\U0001F4CA>>")
             self.statsTrayOpen = False
         else:
-            self.stats_text.grid(row=1, column=7, sticky="ns", padx=(5, 0))
+            self.stats_frame.grid(row=1, column=7, sticky="ns", padx=(5, 0))
             self.stats_btn.config(text="<<\U0001F4CA")
             self.statsTrayOpen = True
             from karel.tkworldadapter import world
             self.updateStatsText(world.getStatsText())
+
+    def _shrinkStatsFont(self):
+        self._statsFontSize = max(8, self._statsFontSize - 2)
+        self.stats_text.config(font=("Courier", self._statsFontSize))
+
+    def _growStatsFont(self):
+        self._statsFontSize = min(32, self._statsFontSize + 2)
+        self.stats_text.config(font=("Courier", self._statsFontSize))
 
     def updateStatsText(self, text):
         """Replace the stats tray's content. Caller (RobotWorld) should only call this

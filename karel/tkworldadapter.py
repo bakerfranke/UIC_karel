@@ -212,6 +212,11 @@ class RobotWorld(RobotWorldBase, Observer) :
             self._robotOrder.append(robotID)
             if robot in self.__gRobots:
                 self._robotCostume[robotID] = self.__gRobots[robot]._costume
+        elif action == karel.robota.UrRobot.setCostumeAction:
+            # Costume changed after creation - refresh the tracked value too, or the
+            # tray would keep showing whatever costume the robot started with forever.
+            if robot in self.__gRobots:
+                self._robotCostume[robotID] = self.__gRobots[robot]._costume
         elif robotID in self._actionCounts and action in self._actionCounts[robotID]:
             self._actionCounts[robotID][action] += 1
 
@@ -226,8 +231,8 @@ class RobotWorld(RobotWorldBase, Observer) :
         stats tray and printStats(), so they can never drift out of sync."""
         size = self.getSize()
         lines = [
-            f"World: {size['streets']}x{size['avenues']}",
-            f"Beepers: {self.getTotalBeeperCount()}",
+            f"World size: {size['streets']} {size['avenues']:<2d}",
+            f"   Beepers: {self.getTotalBeeperCount()}",
         ]
 
         UrRobot = karel.robota.UrRobot
@@ -245,13 +250,13 @@ class RobotWorld(RobotWorldBase, Observer) :
             counts = self._actionCounts.get(robotID, {})
             costume = self._robotCostume.get(robotID, "karel")
 
-            lines.append("-" * 18)
+            lines.append("-" * 20)
 
             dirChar = state.direction().__name__[0]
             beepers = state.beepers()
-            beepersStr = "inf" if beepers == infinity else f"{beepers:03d}"
+            beepersStr = "inf" if beepers == infinity else f"{beepers:<3d}"
             lines.append(
-                f"#{robotID} {costume} {state.street():02d} {state.avenue():02d} "
+                f"#{robotID} {costume} {state.street():2d} {state.avenue():0d} "
                 f"{dirChar} {beepersStr}"
             )
 
@@ -259,8 +264,8 @@ class RobotWorld(RobotWorldBase, Observer) :
             for label, code in countedActions:
                 count = counts.get(code, 0)
                 total += count
-                lines.append(f"{label:>12}: {count:>4}")
-            lines.append(f"{'Total':>12}: {total:>4}")
+                lines.append(f"{label:>10}: {count:<4}")
+            lines.append(f"{'Total':>10}: {total:<4}")
 
         return "\n".join(lines)
 
