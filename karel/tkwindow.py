@@ -79,6 +79,8 @@ class RobotImage:
         cls._pilImages[cache_key] = {}
         cls._photoImages[cache_key] = {}
 
+        missing = []
+        errors = []
         for direction, filename in directions.items():
             # Try local folder first
             local_path = os.path.join(local_images_path, filename)
@@ -95,14 +97,24 @@ class RobotImage:
                 try:
                     if PIL_AVAILABLE:
                         cls._pilImages[cache_key][direction] = Image.open(path)
-                        print(f"Loaded {costume} image: {path}")
                     else:
                         cls._photoImages[cache_key][direction] = PhotoImage(file=path)
-                        print(f"Loaded {costume} image (unscaled): {path}")
                 except Exception as e:
-                    print(f"Error loading {filename} from {path}: {e}")
+                    errors.append(f"{filename} ({e})")
             else:
-                print(f"Warning: Could not find {filename} for costume '{costume}' in local or library folders")
+                missing.append(filename)
+
+        # Silent on success - only speak up if this costume didn't fully load.
+        if missing or errors:
+            problems = []
+            if missing:
+                problems.append(f"missing: {', '.join(missing)}")
+            if errors:
+                problems.append(f"failed to load: {', '.join(errors)}")
+            print(
+                f"Warning: costume '{costume}' did not load correctly ({'; '.join(problems)}). "
+                f"Checked '{image_dir}/' next to your program and the library's own '{image_dir}/' folder."
+            )
 
     @classmethod
     def _getResizedImage(cls, costume, direction, size, greyscale=False, alpha=None):
@@ -177,11 +189,10 @@ class RobotImage:
         if path:
             try:
                 cls._crashPilImage = Image.open(path)
-                print(f"Loaded crash image: {path}")
             except Exception as e:
-                print(f"Error loading crash.png from {path}: {e}")
+                print(f"Warning: crash.png did not load correctly ({e})")
         else:
-            print("Warning: Could not find crash.png in local or library robot_images folder")
+            print(f"Warning: Could not find crash.png in local '{image_dir}/' or the library's own '{image_dir}/' folder")
 
     @classmethod
     def _getCrashImage(cls, size):
