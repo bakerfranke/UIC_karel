@@ -94,8 +94,13 @@ def _check_pause():
                 _window.update()  # Keep GUI responsive
                 time.sleep(0.01)
 
-    # Wait while paused, unless stepping (allow_one_step is True)
-    while _window.is_paused and not _window.allow_one_step:
+    # Wait while paused, unless stepping (allow_one_step is True). Speed all the way
+    # down to 0 (delay == 100) behaves like paused too - lets someone drop the speed to
+    # 0 and then click Step to walk through the program - but deliberately doesn't touch
+    # is_paused itself, so the Paused overlay/status stays hidden; this isn't a "real"
+    # pause the user asked for, just the speed slider bottoming out.
+    _speedIsZero = world is not None and world.delay() >= 100
+    while (_window.is_paused or _speedIsZero) and not _window.allow_one_step:
         _window.update()  # Update GUI so buttons respond
         time.sleep(0.01)  # Small sleep to prevent busy waiting
 
