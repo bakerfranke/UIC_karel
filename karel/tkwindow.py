@@ -458,7 +458,10 @@ class KarelWindow(Frame):
 
         self.is_paused = False  # Start running by default (matches pre-pause/step behavior); call world.startPaused(True) to start paused instead
         self.allow_one_step = False  # Flag for stepping one action at a time
-        self._startup_delay = 0  # No startup delay by default (user can set via startPaused)
+        self._startup_delay = 1500  # Give the window a moment to fully render before the
+        # robot's first action, so it isn't 1-2 steps in before it's even visible. One-time
+        # only (see _first_action) - not repeated on later pause/resume. Override with
+        # world.resume(delay_ms=...) or world.startPaused(False, delay_ms=...).
         self._first_action = True  # Track if this is the first robot action
         self._program_finished = False  # Track if robot has turned off
         self._pauseOverlayRect = None  # Draggable "Paused" banner, created on demand
