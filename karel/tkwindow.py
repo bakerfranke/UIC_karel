@@ -492,7 +492,7 @@ class KarelWindow(Frame):
         # Equal-weight spacer columns on both sides of Speed keep it centered as the window resizes.
         self.columnconfigure(3, weight=1)
         self.columnconfigure(6, weight=1)
-        self.rowconfigure(1, weight=1)
+        self.rowconfigure(2, weight=1)
 
         speedLabel = Label(self, text = "Speed")
         speedLabel.grid(row=0, column=4, sticky="es") #added params from chatgpt
@@ -505,8 +505,19 @@ class KarelWindow(Frame):
         self._crashed = False  # once True, status stays on the crash message
         (self.showPausedStatus if self.is_paused else self.showRunningStatus)()
 
+        # Message bar - full-width row below the toolbar, for the crash message. Unlike
+        # status_label above (narrow, squeezed next to Speed), this row spans the whole
+        # window so a long message never gets clipped. Hidden (zero height, not reserved)
+        # until there's actually a message to show; showCrashMessage() grids it in and
+        # grows the window downward to make room, rather than shrinking anything else.
+        self.message_label = Label(
+            self, text="", font=("Arial", 11, "bold"), anchor="w", padx=8, pady=3
+        )
+        self._messageBarReservedHeight = 0
+
         #|   0   |  1   |    2     |     3      |   4   |   5   |   6    |
         #|  RUN  | STEP | RESTART  |  STATUS    |  LBL  | SLID  | EMPTY  |
+        #|                    MESSAGE BAR (row 1, hidden unless in use)          |
 
         if callback != None : # this makes the speed slider work.
 
@@ -604,7 +615,7 @@ class KarelWindow(Frame):
 
         #BEF TODO: make the canvas and window scaled to the actual number of streets and avenues?
         self._canvas = Canvas(self, height = _windowBottom, width = _windowRight, bg = 'white')
-        self._canvas.grid(row=1, column=0, columnspan=7, sticky="news")
+        self._canvas.grid(row=2, column=0, columnspan=7, sticky="news")
         self.setSize(streets, avenues)
         self.placeBeeper = self.placeBeepers
 
@@ -707,14 +718,38 @@ class KarelWindow(Frame):
         self.status_label.config(text="⏸ Paused", fg="#b8860b", bg=self.cget('bg'))
 
     def showCrashMessage(self, message="⚠ Program crashed - check the console"):
-        """Show a persistent message in the toolbar - no popup, no extra click - so a
-        crash or uncaught error is obvious even though the console isn't visible."""
+        """Show a persistent message in the full-width message bar below the toolbar -
+        no popup, no extra click - so a crash or uncaught error is obvious even though
+        the console isn't visible. Uses its own row (rather than status_label) so the
+        message always has the whole window's width and never gets clipped."""
         self._crashed = True
-        self.status_label.config(text=message, fg="white", bg="#c0392b")
+        self.message_label.config(text=message, fg="white", bg="#c0392b")
+        self.message_label.grid(row=1, column=0, columnspan=8, sticky="ew")
+        self.update_idletasks()  # so winfo_reqheight() below reflects the just-added row
+        self._growWindowForMessageBar(self.message_label.winfo_reqheight())
 
     def clearCrashMessage(self):
         self._crashed = False
+        self.message_label.grid_remove()
+        self._growWindowForMessageBar(0)
         self.showPausedStatus() if self.is_paused else self.showRunningStatus()
+
+    def _growWindowForMessageBar(self, barHeight):
+        """Grow (or shrink) the actual window by however much the message bar's reserved
+        height changed, mirroring _growWindowForTray's approach for the stats tray -
+        grows the window itself rather than relying on some other row shrinking to make
+        room, so the canvas never gets squeezed when the bar appears."""
+        delta = barHeight - self._messageBarReservedHeight
+        if delta == 0:
+            return
+        root = self.__root
+        root.update_idletasks()
+        match = re.match(r'(\d+)x(\d+)([+-]\d+[+-]\d+)', root.geometry())
+        if not match:
+            return
+        w, h, pos = int(match.group(1)), int(match.group(2)), match.group(3)
+        root.geometry(f"{w}x{max(300, h + delta)}{pos}")
+        self._messageBarReservedHeight = barHeight
 
     def toggleStatsTray(self):
         """Show/hide the stats sidebar. Only fetches/renders stats text while opening -
@@ -726,7 +761,7 @@ class KarelWindow(Frame):
             self.statsTrayOpen = False
             self._growWindowForTray(0)  # give the reserved width back
         else:
-            self.stats_frame.grid(row=1, column=7, sticky="ns", padx=(5, 0))
+            self.stats_frame.grid(row=2, column=7, sticky="ns", padx=(5, 0))
             self.stats_btn.config(text="<<\U0001F4CA")
             self.statsTrayOpen = True
             from karel.tkworldadapter import world
