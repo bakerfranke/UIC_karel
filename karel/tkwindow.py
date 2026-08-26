@@ -57,7 +57,13 @@ class RobotImage:
 
     @classmethod
     def _loadImages(cls, costume="karel", image_dir="robot_images"):
-        """Load all robot images for a specific costume"""
+        """Load all images for a costume. The four directional images (_north/_south/
+        _east/_west) are required - a missing or broken one prints a Warning. Three
+        more suffixes (_crash/_beeper/_turnOff) are optional per-costume overrides for
+        the crash image, the ground-beeper marker, and the turned-off look - crashOut(),
+        the world's beeper markers, and greyOut() all fall back to the library's generic
+        crash.png / black-circle / auto-greyscale look when a costume doesn't supply its
+        own, so a missing extra is never reported (only a broken/corrupt one is)."""
         cache_key = costume
         if cache_key in cls._pilImages:  # Already loaded
             return
@@ -69,11 +75,16 @@ class RobotImage:
         karel_dir = os.path.dirname(os.path.abspath(__file__))
         library_images_path = os.path.join(karel_dir, image_dir)
 
-        directions = {
+        required = {
             North: f"{costume}_north.png",
             East: f"{costume}_east.png",
             South: f"{costume}_south.png",
             West: f"{costume}_west.png"
+        }
+        optional = {
+            'crash': f"{costume}_crash.png",
+            'beeper': f"{costume}_beeper.png",
+            'turnOff': f"{costume}_turnOff.png",
         }
 
         # Create nested dict for this costume
@@ -82,10 +93,9 @@ class RobotImage:
 
         missing = []
         errors = []
-        for direction, filename in directions.items():
-            # Try local folder first
+
+        def _tryLoad(key, filename, isRequired):
             local_path = os.path.join(local_images_path, filename)
-            # Fall back to library folder
             library_path = os.path.join(library_images_path, filename)
 
             path = None
@@ -97,13 +107,18 @@ class RobotImage:
             if path:
                 try:
                     if PIL_AVAILABLE:
-                        cls._pilImages[cache_key][direction] = Image.open(path)
+                        cls._pilImages[cache_key][key] = Image.open(path)
                     else:
-                        cls._photoImages[cache_key][direction] = PhotoImage(file=path)
+                        cls._photoImages[cache_key][key] = PhotoImage(file=path)
                 except Exception as e:
                     errors.append(f"{filename} ({e})")
-            else:
+            elif isRequired:
                 missing.append(filename)
+
+        for direction, filename in required.items():
+            _tryLoad(direction, filename, isRequired=True)
+        for key, filename in optional.items():
+            _tryLoad(key, filename, isRequired=False)
 
         # Silent on success - only speak up if this costume didn't fully load.
         if missing or errors:
@@ -334,9 +349,18 @@ class RobotImage:
         image_size = max(10, int(self.__scaleFactor * 0.85))
 
         if self._isCrashed:
-            # Illegal action - show the crash image instead of the normal costume,
-            # regardless of direction/greyed/transparent state.
-            image = RobotImage._getCrashImage(image_size)
+            # Illegal action - show this costume's own _crash image if it has one,
+            # otherwise the library's generic crash.png - regardless of
+            # direction/greyed/transparent state.
+            image = RobotImage._getResizedImage(self._costume, 'crash', image_size)
+            if image is None:
+                image = RobotImage._getCrashImage(image_size)
+        elif self._isGreyed and RobotImage._pilImages.get(self._costume, {}).get('turnOff') is not None:
+            # This costume has its own turned-off look - use it as-is (still subject to
+            # the same semi-transparency as the auto-greyscale fallback below) instead
+            # of graying out the normal directional image.
+            alpha = 150 if self._isTransparent else None
+            image = RobotImage._getResizedImage(self._costume, 'turnOff', image_size, alpha=alpha)
         elif PIL_AVAILABLE:
             # Get the resized image for current direction, with greyscale if needed
             # Use semi-transparent (150/255 alpha ≈ 59%) if transparent flag is set
@@ -894,8 +918,18 @@ class KarelWindow(Frame):
             if self._number < 0 :
                 val = "oo"
             (x,y) = self._scaler(self._street+placeFactor, self._avenue-placeFactor)
-            self._rcode = self._canvas.create_oval(x, y, x + self.__scaleFactor*sizeFactor, y + self.__scaleFactor*sizeFactor, fill= 'black')
-            self._code = self._canvas.create_text(x + self.__scaleFactor*placeFactor, y+ self.__scaleFactor*placeFactor, text=val, 
+            boxSize = self.__scaleFactor*sizeFactor
+
+            # Use the active costume's own _beeper image if it has one, otherwise the
+            # plain black circle. The beeper count is still drawn on top either way.
+            costume = RobotImage._defaultCostume
+            RobotImage._loadImages(costume)  # no-op if already loaded/cached
+            image = RobotImage._getResizedImage(costume, 'beeper', max(10, int(boxSize))) if PIL_AVAILABLE else None
+            if image:
+                self._rcode = self._canvas.create_image(x + boxSize / 2, y + boxSize / 2, image=image)
+            else:
+                self._rcode = self._canvas.create_oval(x, y, x + boxSize, y + boxSize, fill= 'black')
+            self._code = self._canvas.create_text(x + self.__scaleFactor*placeFactor, y+ self.__scaleFactor*placeFactor, text=val,
                                       font = Font(size = int(-self.__scaleFactor*placeFactor)), fill = 'white')
             
         def deleteAll(self):
