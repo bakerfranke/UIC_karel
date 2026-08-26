@@ -52,6 +52,9 @@ class RobotImage:
     _alphaPhotoImages = {}  # Cache for semi-transparent versions
     _scaleFactor = 1.0   # Current scale factor for the window
     _defaultCostume = 'karel'  # Default costume (can be changed via world.setRobotCostume)
+    _lastCostume = None  # Most recently seen costume, from ANY robot (ctor or setCostume) -
+                         # used to pick the ground-beeper marker's image, since that's a
+                         # world-level visual with no single "owning" robot to ask.
     _crashPilImage = None       # The loaded crash.png, before resizing
     _crashPhotoCache = {}       # Resized crash PhotoImages, keyed by size
 
@@ -234,6 +237,7 @@ class RobotImage:
         self._direction = direction
         # Use provided costume or fall back to class default
         self._costume = costume if costume else RobotImage._defaultCostume
+        RobotImage._lastCostume = self._costume
         if fill == None:
             fill = "yellow"
         self._fill = fill
@@ -286,6 +290,7 @@ class RobotImage:
     def setCostume(self, costume):
         """Change this robot's costume (image) on the fly."""
         self._costume = costume
+        RobotImage._lastCostume = costume
         RobotImage._loadImages(self._costume)
         if self._canvas:
             self._canvas.delete(self.tag)
@@ -481,6 +486,7 @@ class KarelWindow(Frame):
         self.__scaleFactor = (self.__bottom - self.__top)*1.0/streets
 
         self.is_paused = False  # Start running by default (matches pre-pause/step behavior); call world.startPaused(True) to start paused instead
+        self._loadingWorldFile = False  # True only while RobotWorld.readWorld() is running - see Beeper.place()
         self.allow_one_step = False  # Flag for stepping one action at a time
         self._startup_delay = 1500  # Give the window a moment to fully render before the
         # robot's first action, so it isn't 1-2 steps in before it's even visible. One-time
@@ -907,6 +913,12 @@ class KarelWindow(Frame):
             self._code = 0 #identifies the text in the beeper
             self._rcode = 0 # identifies the oval beeper figure
             self._canvas = window._canvas
+            self._window = window
+            # Captured once, at creation - not re-checked on every place() call - so a
+            # world-file beeper stays exempt from costume theming even across a later
+            # moveScale() (e.g. from a window resize), by which point the window's
+            # _loadingWorldFile flag has long since gone back to False.
+            self._fromWorldFile = window._loadingWorldFile
 
 
 
@@ -922,9 +934,15 @@ class KarelWindow(Frame):
 
             # Use the active costume's own _beeper image if it has one, otherwise the
             # plain black circle. The beeper count is still drawn on top either way.
-            costume = RobotImage._defaultCostume
-            RobotImage._loadImages(costume)  # no-op if already loaded/cached
-            image = RobotImage._getResizedImage(costume, 'beeper', max(10, int(boxSize))) if PIL_AVAILABLE else None
+            # "Active" = whichever costume was most recently used by any robot (ctor or
+            # setCostume()). Beepers loaded from a world file (readWorld()) are exempt -
+            # a .kwld file describes layout data, not a themed look, so those always
+            # render as the plain circle no matter what costume is active.
+            costume = None if self._fromWorldFile else (RobotImage._lastCostume or RobotImage._defaultCostume)
+            image = None
+            if costume:
+                RobotImage._loadImages(costume)  # no-op if already loaded/cached
+                image = RobotImage._getResizedImage(costume, 'beeper', max(10, int(boxSize))) if PIL_AVAILABLE else None
             if image:
                 self._rcode = self._canvas.create_image(x + boxSize / 2, y + boxSize / 2, image=image)
             else:

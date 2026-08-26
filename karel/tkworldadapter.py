@@ -449,8 +449,14 @@ class RobotWorld(RobotWorldBase, Observer) :
         """Read the world configuration from a file and initialize graphics if needed."""
         #from karel.tkworldadapter import initialize_graphics
         self.initialize_graphics()  # Ensure graphics are initialized
-        super().readWorld(filename)  # Call the base class implementation
         global _window
+        if _window:
+            _window._loadingWorldFile = True  # beepers placed below stay plain circles - see Beeper.place()
+        try:
+            super().readWorld(filename)  # Call the base class implementation
+        finally:
+            if _window:
+                _window._loadingWorldFile = False
         if _window:
             _window.update()  # Trigger a refresh of the graphical window
             #_window.run(lambda: None)  # Keep the window open
