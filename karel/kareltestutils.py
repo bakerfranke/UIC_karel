@@ -1,6 +1,9 @@
 # generic value v. expected test
 from karel.robota import *
 import karel.robotutils as util
+import inspect
+import os
+import runpy
 
 def testEquals(test_name, test_desc, value, expected, verbose=True):
     result = True
@@ -155,3 +158,79 @@ def testWorldEquals(test_name, robot_world:RobotWorld, world_kwld_file:str):
 
     print(display_str)
     return diffs['diffs']==False
+
+def runMainOnly(mainFilePath, exemptActions=None):
+    """Run a student's main.py the same way `python main.py` would - respecting
+    `if __name__ == "__main__":` - while watching for any robot primitive action
+    (move, turnLeft, pickBeeper, putBeeper, setCostume, etc.) called directly from
+    that top-level main block, rather than from inside a method defined on the
+    robot's own class.
+
+    This catches students who "helped" an incomplete class method along by adding
+    an extra action call in main - the end state can come out looking right by
+    luck without the assignment's one designated solving method actually solving
+    the whole problem on its own.
+
+    Returns (namespace, violations):
+      namespace  - the dict of globals from the executed file, e.g. namespace['harvey']
+                   (same thing `main.harvey` would have given you with `import main`)
+      violations - list of human-readable strings, one per offending call, e.g.
+                   "move() was called directly in your main block (line 12) ...".
+                   An empty list means main only orchestrated - the intended style.
+
+    exemptActions defaults to just turnOff - ending a program with robot.turnOff()
+    directly in main is normal and expected, not a violation. Robot creation itself
+    never reaches this check (it doesn't route through _perform_action).
+    """
+    mainFilePath = os.path.abspath(mainFilePath)
+    if exemptActions is None:
+        exemptActions = {UrRobot.turnOffAction}
+
+    violations = []
+    original = UrRobot._perform_action
+
+    def _instrumented(self, action, *args, **kwargs):
+        actionFrame = inspect.currentframe().f_back  # the move()/turnLeft()/etc. frame
+        callerFrame = actionFrame.f_back if actionFrame else None  # whoever called that action method
+        if (action not in exemptActions and callerFrame is not None
+                and callerFrame.f_code.co_filename == mainFilePath
+                and callerFrame.f_code.co_name == '<module>'):
+            violations.append(
+                f"{actionFrame.f_code.co_name}() was called directly in your main "
+                f"block (line {callerFrame.f_lineno}), not from inside a method - "
+                f"your class method(s) should be doing this work, not main."
+            )
+        return original(self, action, *args, **kwargs)
+
+    UrRobot._perform_action = _instrumented
+    try:
+        namespace = runpy.run_path(mainFilePath, run_name="__main__")
+    finally:
+        UrRobot._perform_action = original
+
+    return namespace, violations
+
+def testMainGuardPurity(test_name, mainFilePath, exemptActions=None, verbose=True):
+    """Wraps runMainOnly() in the same print-a-block-every-time style as testEquals().
+    Returns True (and the namespace of globals from main.py) if main.py's
+    `if __name__ == "__main__":` block never called a robot action directly -
+    False (with the namespace still returned, since main did run) otherwise."""
+    namespace, violations = runMainOnly(mainFilePath, exemptActions)
+    result = len(violations) == 0
+
+    display_str = (
+        f"{'-'*70}\n"
+        f"TEST: {test_name}\n"
+        f"Checking that main only creates the robot and calls its own methods "
+        f"(no problem-solving work directly in main)\n"
+    )
+    if result:
+        display_str += "RESULT: main only orchestrated - no direct action calls found! (Yay)\n"
+    else:
+        display_str += "PROBLEMS FOUND in your main block:\n" + "\n".join(f"  - {v}" for v in violations) + "\n"
+    display_str += f"      Pass: {result}"
+
+    if result == False or verbose == True:
+        print(display_str)
+
+    return namespace, result

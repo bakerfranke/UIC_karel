@@ -3,6 +3,8 @@ test_beeper_room_start.py / _end.py / _world.py each just call one function here
 Keeping the real logic in one place means there's only one copy of the setup/assertion
 code to maintain even though the rubric grades it as three separate point items."""
 
+import runpy
+
 from karel.robota import *
 import karel.robotutils as utils
 import karel.kareltestutils as test
@@ -12,23 +14,26 @@ EXPECTED_END = (4, 3, East, 0)     # street, avenue, direction, beepers
 
 
 def _setup():
-    """Run the student's program once. Returns (world, boomy), or None if the import
-    failed or the robot isn't named 'boomy' - an error is already printed in that case."""
+    """Run the student's program once. Returns (world, boomy), or None if the program
+    errored out or the robot isn't named 'boomy' - an error is already printed in that
+    case. Runs main.py with runpy (rather than `import main`) so this also works for
+    programs that put their code inside `if __name__ == "__main__":`, which a plain
+    import would silently skip."""
     world = UrRobot.use_graphics(False)
     world.setTrace(False)
     world.setDelay(0)
 
     try:
-        import main  # This will attempt to run the program
+        namespace = runpy.run_path("main.py", run_name="__main__")
     except Exception as e:
-        print(f"ERROR: while importing 'main': {e}")
+        print(f"ERROR: while running 'main.py': {e}")
         return None
 
-    if not hasattr(main, 'boomy'):
+    if 'boomy' not in namespace:
         print("ERROR: The program assumes the robot is named 'boomy'.")
         return None
 
-    return world, main.boomy
+    return world, namespace['boomy']
 
 
 def check_start_state(test_feedback):

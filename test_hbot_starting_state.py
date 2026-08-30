@@ -1,3 +1,5 @@
+import runpy
+
 from karel.robota import *
 import karel.robotutils as utils
 
@@ -13,20 +15,23 @@ def test_passed(test_feedback):
     world.setTrace(False)
     world.setDelay(0)
 
-    # Try to run the program and quit if it has a runtime error
+    # Try to run the program and quit if it has a runtime error. Runs main.py with
+    # runpy (rather than `import main`) so this also works for programs that put
+    # their code inside `if __name__ == "__main__":`, which a plain import would
+    # silently skip.
     try:
-        import main  # This will attempt to run the program
+        namespace = runpy.run_path("main.py", run_name="__main__")
     except Exception as e:
         # Provide feedback about the error
-        print(f"ERROR: while importing 'main': {e}")
+        print(f"ERROR: while running 'main.py': {e}")
         return False
 
     # Make sure the robot exists and is named 'bob', per the starter code
-    if not hasattr(main, 'bob'):
+    if 'bob' not in namespace:
         print("ERROR: The program assumes the robot is named 'bob'.")
         return False
 
-    bob = main.bob
+    bob = namespace['bob']
 # END SETUP
 
     # bob must have started at the correct location, facing the correct
