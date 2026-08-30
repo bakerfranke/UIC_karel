@@ -181,10 +181,16 @@ def runMainOnly(mainFilePath, exemptActions=None):
     exemptActions defaults to just turnOff - ending a program with robot.turnOff()
     directly in main is normal and expected, not a violation. Robot creation itself
     never reaches this check (it doesn't route through _perform_action).
+
+    Forces headless mode before running, regardless of what the student's own main.py
+    sets (world.setSize()/setDelay()/etc. are for a human watching it run) - a real
+    animated run at the student's own delay would make grading needlessly slow.
     """
     mainFilePath = os.path.abspath(mainFilePath)
     if exemptActions is None:
         exemptActions = {UrRobot.turnOffAction}
+
+    UrRobot.use_graphics(False)
 
     violations = []
     original = UrRobot._perform_action
@@ -203,10 +209,24 @@ def runMainOnly(mainFilePath, exemptActions=None):
         return original(self, action, *args, **kwargs)
 
     UrRobot._perform_action = _instrumented
+    original_sleep = UrRobot.sleep
+    # UrRobot.sleep() does a real time.sleep(world.delay()/100.0) regardless of
+    # graphics/headless mode - so the student's own world.setDelay(...) call (meant to
+    # pace an animation for a human) would otherwise make every action in this run
+    # actually wait in real time. Neutralize it for the duration of this run.
+    UrRobot.sleep = lambda self: None
     try:
         namespace = runpy.run_path(mainFilePath, run_name="__main__")
+    except Exception as e:
+        # An uncaught crash left main.py's process-wide "paused, waiting for a Run
+        # click that will never come" state set - letting that exception keep
+        # propagating uncaught up through the caller hangs the grading run instead of
+        # just failing it. Report it and return cleanly instead.
+        print(f"ERROR: your main.py raised an exception instead of completing: {e}")
+        return None, violations
     finally:
         UrRobot._perform_action = original
+        UrRobot.sleep = original_sleep
 
     return namespace, violations
 
@@ -216,6 +236,8 @@ def testMainGuardPurity(test_name, mainFilePath, exemptActions=None, verbose=Tru
     `if __name__ == "__main__":` block never called a robot action directly -
     False (with the namespace still returned, since main did run) otherwise."""
     namespace, violations = runMainOnly(mainFilePath, exemptActions)
+    if namespace is None:  # main.py crashed - already reported by runMainOnly
+        return None, False
     result = len(violations) == 0
 
     display_str = (
