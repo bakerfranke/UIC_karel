@@ -355,8 +355,20 @@ def runRobotChecklist(class_name, robot_var, start_state, end_state, min_methods
         from karel.robota import world as _world
         if world_setup:
             world_setup(_world)
-        r = cls(*start_state)
-        getattr(r, solving_method)()
+        # runMainOnly() (called for step 1, above) restores the real
+        # UrRobot.sleep() after it finishes - but main.py's own
+        # world.setDelay(...) call is still sitting on the (shared, singleton)
+        # world object. Without re-neutralizing sleep here too, every action
+        # in this isolated call would do a real time.sleep() at that delay -
+        # for a ~90-action solution at delay 30, that's ~27 real seconds,
+        # easily blowing a grading timeout.
+        original_sleep = UrRobot.sleep
+        UrRobot.sleep = lambda self: None
+        try:
+            r = cls(*start_state)
+            getattr(r, solving_method)()
+        finally:
+            UrRobot.sleep = original_sleep
         return r
 
     namespace, _violations = runMainOnly(main_file)
