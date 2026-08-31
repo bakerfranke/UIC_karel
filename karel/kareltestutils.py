@@ -224,8 +224,8 @@ def runMainOnly(mainFilePath, exemptActions=None, allowedMethods=None):
                     if methodName not in allowedMethods and methodName not in flaggedMethods:
                         flaggedMethods.add(methodName)
                         violations.append(
-                            f"{methodName}() was called directly in your main block "
-                            f"(line {caller.f_lineno}) - main should only call "
+                            f"{methodName}() was called directly in your __main__ block "
+                            f"(line {caller.f_lineno}) - __main__ should only call "
                             f"{' or '.join(sorted(allowedMethods))}, with all the "
                             f"actual problem-solving happening inside your class's "
                             f"own methods."
@@ -238,9 +238,9 @@ def runMainOnly(mainFilePath, exemptActions=None, allowedMethods=None):
                     and callerFrame.f_code.co_filename == mainFilePath
                     and callerFrame.f_code.co_name == '<module>'):
                 violations.append(
-                    f"{actionFrame.f_code.co_name}() was called directly in your main "
+                    f"{actionFrame.f_code.co_name}() was called directly in your __main__ "
                     f"block (line {callerFrame.f_lineno}), not from inside a method - "
-                    f"your class method(s) should be doing this work, not main."
+                    f"your class method(s) should be doing this work, not __main__."
                 )
         return original(self, action, *args, **kwargs)
 
@@ -281,13 +281,13 @@ def testMainGuardPurity(test_name, mainFilePath, exemptActions=None, allowedMeth
     display_str = (
         f"{'-'*70}\n"
         f"TEST: {test_name}\n"
-        f"Checking that main only creates the robot and calls its own methods "
-        f"(no problem-solving work directly in main)\n"
+        f"Checking that __main__ only creates the robot and calls its own methods "
+        f"(no problem-solving work directly in __main__)\n"
     )
     if result:
-        display_str += "RESULT: main only orchestrated - no direct action calls found! (Yay)\n"
+        display_str += "RESULT: __main__ only orchestrated - no direct action calls found! (Yay)\n"
     else:
-        display_str += "PROBLEMS FOUND in your main block:\n" + "\n".join(f"  - {v}" for v in violations) + "\n"
+        display_str += "PROBLEMS FOUND in your __main__ block:\n" + "\n".join(f"  - {v}" for v in violations) + "\n"
     display_str += f"      Pass: {result}"
 
     if result == False or verbose == True:
@@ -374,10 +374,10 @@ def runRobotChecklist(class_name, robot_var, start_state, end_state, min_methods
 
     robot = namespace.get(robot_var)
     if robot is None:
-        checkfail(f"Robot named '{robot_var}' created in main",
+        checkfail(f"Robot named '{robot_var}' created in __main__",
                    f"{main_file} should create a {class_name} instance named '{robot_var}'.")
         return False, lines
-    checkpass(f"Robot named '{robot_var}' created in main")
+    checkpass(f"Robot named '{robot_var}' created in __main__")
 
     history = util.getStateHistory(robot)
     initial = history[0]
@@ -412,7 +412,7 @@ def runRobotChecklist(class_name, robot_var, start_state, end_state, min_methods
         except Exception as e:
             checkfail(f"{solving_method}() solves the problem on its own",
                        f"Calling {solving_method}() directly on a fresh robot raised an "
-                       f"exception: {e}. Your main block reached the right answer overall, "
+                       f"exception: {e}. Your __main__ block reached the right answer overall, "
                        f"which means it must be doing some of the work itself instead of "
                        f"leaving it all to {solving_method}().")
             return False, lines
@@ -421,9 +421,9 @@ def runRobotChecklist(class_name, robot_var, start_state, end_state, min_methods
             checkfail(f"{solving_method}() solves the problem on its own",
                        f"Calling {solving_method}() directly on a fresh robot gave "
                        f"{status_tuple_str(isolatedTuple)}, expected {status_tuple_str(end_state)}. "
-                       f"Your main block reached the right answer overall, which means it "
+                       f"Your __main__ block reached the right answer overall, which means it "
                        f"must be doing some of the work itself instead of leaving it all to "
-                       f"{solving_method}() - check for extra calls in your main block.")
+                       f"{solving_method}() - check for extra calls in your __main__ block.")
             return False, lines
         checkpass(f"{solving_method}() solves the problem on its own")
 
