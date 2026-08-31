@@ -296,7 +296,7 @@ def testMainGuardPurity(test_name, mainFilePath, exemptActions=None, allowedMeth
     return namespace, result
 
 def runRobotChecklist(class_name, robot_var, start_state, end_state, min_methods,
-                       model_file=None, solving_method=None, world_setup=None,
+                       solving_method=None, model_file=None, world_setup=None,
                        main_file="main.py"):
     """Runs main.py once and walks a fixed checklist, in order, stopping at the
     first failure (later items are simply never attempted/printed):
@@ -307,19 +307,29 @@ def runRobotChecklist(class_name, robot_var, start_state, end_state, min_methods
       4. Starting state matches start_state
       5. Ending state matches end_state
       6. Class defines at least min_methods of its own methods
-      7. (only if model_file is given) Robot's path matches the model solution's
+      7. (only if solving_method is given) solving_method() reaches end_state
+         all on its own, called directly on a fresh instance - main.py's overall
+         run already reached the right answer (step 5 passed), so if the
+         designated method *alone* doesn't get there too, that's proof main.py
+         has extra work of its own propping the result up instead of leaving it
+         all to that one method.
+      8. (only if model_file is also given) that same isolated run's path
+         matches the model solution's, called the same way.
 
     start_state/end_state are (street, avenue, direction, beepers) tuples, same
     shape as testRobotEquals() expects.
 
-    model_file/solving_method are optional - set both to also compare against a
-    model solution's path (construct model's class the same way, call
-    solving_method on it, compare (street, avenue) sequences). world_setup, if
-    given, is a one-argument callable (world_setup(world)) invoked before the
-    model run for problems that need e.g. world.readWorld(...) first - main.py's
-    own run already handles its own world setup, so this is only needed for the
-    model comparison, which runs the model file WITHOUT its main guard (so any
-    world.readWorld() inside that guard never fires on its own).
+    solving_method is the name of the one method the assignment says should
+    solve the whole problem (e.g. "harvestBeeperField") - required for checks 7
+    and 8, skipped (with no line printed) if left as None. model_file additionally
+    requires solving_method, and compares against a model solution's path instead
+    of just its end state.
+
+    world_setup, if given, is a one-argument callable (world_setup(world))
+    invoked before each isolated run (checks 7 and 8) for problems that need
+    e.g. world.readWorld(...) first - main.py's own run already handles its own
+    world setup via step 1, so this is only needed for the isolated calls, which
+    construct a fresh instance directly rather than running main.py's guard.
 
     Returns (passed, lines) - lines is a list of already-formatted checklist
     strings ('  [OK] ...' / '  [X ] ...' plus indented detail lines), ready to
@@ -334,6 +344,20 @@ def runRobotChecklist(class_name, robot_var, start_state, end_state, min_methods
         lines.append(f"  [X ] {label}")
         if detail:
             lines.append(f"       {detail}")
+
+    def isolatedRun(cls):
+        # Construct a fresh instance and call solving_method directly - not
+        # through main.py's guard - so it can't lean on any extra work main.py
+        # might be doing. Re-fetches world fresh each call (not just once
+        # outside): running this once already consumes/places beepers, so a
+        # second isolated call (checking the model too) needs its own clean
+        # slate rather than whatever the first call left behind.
+        from karel.robota import world as _world
+        if world_setup:
+            world_setup(_world)
+        r = cls(*start_state)
+        getattr(r, solving_method)()
+        return r
 
     namespace, _violations = runMainOnly(main_file)
     if namespace is None:
@@ -382,47 +406,49 @@ def runRobotChecklist(class_name, robot_var, start_state, end_state, min_methods
         return False, lines
     checkpass(f"Class defines at least {min_methods} method(s) ({len(ownMethods)} found: {', '.join(ownMethods)})")
 
-    if model_file:
+    if solving_method:
         try:
-            modelNamespace = runpy.run_path(model_file)
+            isolatedRobot = isolatedRun(robotClass)
         except Exception as e:
-            checkfail("Path matches model solution", f"Could not run the model solution file: {e}")
+            checkfail(f"{solving_method}() solves the problem on its own",
+                       f"Calling {solving_method}() directly on a fresh robot raised an "
+                       f"exception: {e}. Your main block reached the right answer overall, "
+                       f"which means it must be doing some of the work itself instead of "
+                       f"leaving it all to {solving_method}().")
             return False, lines
-        modelClass = modelNamespace.get(class_name)
-        if modelClass is None or solving_method is None:
-            checkfail("Path matches model solution",
-                       "Model comparison misconfigured - check model_file/solving_method.")
+        isolatedTuple = util.getStatus(isolatedRobot)
+        if isolatedTuple != end_state:
+            checkfail(f"{solving_method}() solves the problem on its own",
+                       f"Calling {solving_method}() directly on a fresh robot gave "
+                       f"{status_tuple_str(isolatedTuple)}, expected {status_tuple_str(end_state)}. "
+                       f"Your main block reached the right answer overall, which means it "
+                       f"must be doing some of the work itself instead of leaving it all to "
+                       f"{solving_method}() - check for extra calls in your main block.")
             return False, lines
+        checkpass(f"{solving_method}() solves the problem on its own")
 
-        def _isolatedPath(cls):
-            # Calls solving_method directly on a fresh instance - not the full
-            # main.py run captured in `history` above, which may include extra
-            # calls after the solving method (e.g. turnOff()) that the model's
-            # isolated run never makes, throwing off a length-based comparison.
-            # Re-fetch world fresh each call - running the first isolated call
-            # can consume/place beepers the second one needs a clean slate for.
-            from karel.robota import world as _world
-            if world_setup:
-                world_setup(_world)
-            r = cls(*start_state)
-            getattr(r, solving_method)()
-            return [(s.street(), s.avenue()) for s in util.getStateHistory(r)]
-
-        try:
-            studentPath = _isolatedPath(robotClass)
-        except Exception as e:
-            checkfail("Path matches model solution",
-                       f"Your {solving_method}() raised an exception when called directly: {e}")
-            return False, lines
-        try:
-            modelPath = _isolatedPath(modelClass)
-        except Exception as e:
-            checkfail("Path matches model solution", f"Model solution raised an exception: {e}")
-            return False, lines
-        if studentPath != modelPath:
-            checkfail("Path matches model solution",
-                       f"Paths diverge - yours has {len(studentPath)} step(s), model has {len(modelPath)}.")
-            return False, lines
-        checkpass("Path matches model solution")
+        if model_file:
+            try:
+                modelNamespace = runpy.run_path(model_file)
+            except Exception as e:
+                checkfail("Path matches model solution", f"Could not run the model solution file: {e}")
+                return False, lines
+            modelClass = modelNamespace.get(class_name)
+            if modelClass is None:
+                checkfail("Path matches model solution",
+                           f"Could not find class {class_name} in {model_file}.")
+                return False, lines
+            try:
+                modelRobot = isolatedRun(modelClass)
+            except Exception as e:
+                checkfail("Path matches model solution", f"Model solution raised an exception: {e}")
+                return False, lines
+            studentPath = [(s.street(), s.avenue()) for s in util.getStateHistory(isolatedRobot)]
+            modelPath = [(s.street(), s.avenue()) for s in util.getStateHistory(modelRobot)]
+            if studentPath != modelPath:
+                checkfail("Path matches model solution",
+                           f"Paths diverge - yours has {len(studentPath)} step(s), model has {len(modelPath)}.")
+                return False, lines
+            checkpass("Path matches model solution")
 
     return True, lines
