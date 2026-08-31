@@ -342,8 +342,8 @@ def runRobotChecklist(class_name, robot_var, start_state, end_state, min_methods
 
     def checkfail(label, detail=""):
         lines.append(f"  [X ] {label}")
-        if detail:
-            lines.append(f"       {detail}")
+        for detailLine in detail.splitlines():
+            lines.append(f"       {detailLine}")
 
     def isolatedRun(cls):
         # Construct a fresh instance and call solving_method directly - not
@@ -455,11 +455,41 @@ def runRobotChecklist(class_name, robot_var, start_state, end_state, min_methods
             except Exception as e:
                 checkfail("Path matches model solution", f"Model solution raised an exception: {e}")
                 return False, lines
-            studentPath = [(s.street(), s.avenue()) for s in util.getStateHistory(isolatedRobot)]
-            modelPath = [(s.street(), s.avenue()) for s in util.getStateHistory(modelRobot)]
+            studentHistory = util.getStateHistory(isolatedRobot)
+            modelHistory = util.getStateHistory(modelRobot)
+            studentPath = [(s.street(), s.avenue()) for s in studentHistory]
+            modelPath = [(s.street(), s.avenue()) for s in modelHistory]
             if studentPath != modelPath:
-                checkfail("Path matches model solution",
-                           f"Paths diverge - yours has {len(studentPath)} step(s), model has {len(modelPath)}.")
+                detail = f"Paths diverge - yours has {len(studentPath)} step(s), model has {len(modelPath)}."
+
+                # Find the first index where the two actually differ, so far as both
+                # have a step to compare - if they agree everywhere they overlap, the
+                # "divergence" is really just one path continuing past where the
+                # other stopped, so treat right-after-the-last-shared-step as where
+                # they diverge.
+                minLen = min(len(studentPath), len(modelPath))
+                divergeAt = next((i for i in range(minLen) if studentPath[i] != modelPath[i]), minLen)
+
+                if divergeAt > 0:
+                    lastShared = studentHistory[divergeAt - 1]
+                    detail += (f"\nStep {divergeAt - 1} (last step you both agree on): "
+                               f"{status_tuple_str((lastShared.street(), lastShared.avenue(), lastShared.direction(), lastShared.beepers()))}")
+
+                if divergeAt < len(studentHistory):
+                    yours = studentHistory[divergeAt]
+                    detail += (f"\nStep {divergeAt} (yours): "
+                               f"{status_tuple_str((yours.street(), yours.avenue(), yours.direction(), yours.beepers()))}")
+                else:
+                    detail += f"\nStep {divergeAt}: your path ended here."
+
+                if divergeAt < len(modelHistory):
+                    models = modelHistory[divergeAt]
+                    detail += (f"\nStep {divergeAt} (model): "
+                               f"{status_tuple_str((models.street(), models.avenue(), models.direction(), models.beepers()))}")
+                else:
+                    detail += f"\nStep {divergeAt}: the model solution's path ended here."
+
+                checkfail("Path matches model solution", detail)
                 return False, lines
             checkpass("Path matches model solution")
 
