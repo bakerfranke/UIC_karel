@@ -294,3 +294,135 @@ def testMainGuardPurity(test_name, mainFilePath, exemptActions=None, allowedMeth
         print(display_str)
 
     return namespace, result
+
+def runRobotChecklist(class_name, robot_var, start_state, end_state, min_methods,
+                       model_file=None, solving_method=None, world_setup=None,
+                       main_file="main.py"):
+    """Runs main.py once and walks a fixed checklist, in order, stopping at the
+    first failure (later items are simply never attempted/printed):
+
+      1. Program runs without crashing
+      2. Class <class_name> exists
+      3. Robot named <robot_var> was created in main
+      4. Starting state matches start_state
+      5. Ending state matches end_state
+      6. Class defines at least min_methods of its own methods
+      7. (only if model_file is given) Robot's path matches the model solution's
+
+    start_state/end_state are (street, avenue, direction, beepers) tuples, same
+    shape as testRobotEquals() expects.
+
+    model_file/solving_method are optional - set both to also compare against a
+    model solution's path (construct model's class the same way, call
+    solving_method on it, compare (street, avenue) sequences). world_setup, if
+    given, is a one-argument callable (world_setup(world)) invoked before the
+    model run for problems that need e.g. world.readWorld(...) first - main.py's
+    own run already handles its own world setup, so this is only needed for the
+    model comparison, which runs the model file WITHOUT its main guard (so any
+    world.readWorld() inside that guard never fires on its own).
+
+    Returns (passed, lines) - lines is a list of already-formatted checklist
+    strings ('  [OK] ...' / '  [X ] ...' plus indented detail lines), ready to
+    print or hand to test_feedback.write('\\n'.join(lines)).
+    """
+    lines = []
+
+    def checkpass(label):
+        lines.append(f"  [OK] {label}")
+
+    def checkfail(label, detail=""):
+        lines.append(f"  [X ] {label}")
+        if detail:
+            lines.append(f"       {detail}")
+
+    namespace, _violations = runMainOnly(main_file)
+    if namespace is None:
+        checkfail("Program runs without crashing", "See the error printed above.")
+        return False, lines
+    checkpass("Program runs without crashing")
+
+    robotClass = namespace.get(class_name)
+    if robotClass is None:
+        checkfail(f"Class {class_name} exists",
+                   f"Could not find a class named {class_name} in {main_file}.")
+        return False, lines
+    checkpass(f"Class {class_name} exists")
+
+    robot = namespace.get(robot_var)
+    if robot is None:
+        checkfail(f"Robot named '{robot_var}' created in main",
+                   f"{main_file} should create a {class_name} instance named '{robot_var}'.")
+        return False, lines
+    checkpass(f"Robot named '{robot_var}' created in main")
+
+    history = util.getStateHistory(robot)
+    initial = history[0]
+    initialTuple = (initial.street(), initial.avenue(), initial.direction(), initial.beepers())
+    if initialTuple != start_state:
+        checkfail("Starting state correct",
+                   f"Expected {status_tuple_str(start_state)}, got {status_tuple_str(initialTuple)}.")
+        return False, lines
+    checkpass("Starting state correct")
+
+    final = history[-1]
+    finalTuple = (final.street(), final.avenue(), final.direction(), final.beepers())
+    if finalTuple != end_state:
+        checkfail("Ending state correct",
+                   f"Expected {status_tuple_str(end_state)}, got {status_tuple_str(finalTuple)}.")
+        return False, lines
+    checkpass("Ending state correct")
+
+    ownMethods = sorted(
+        n for n, v in vars(robotClass).items()
+        if not n.startswith('_') and inspect.isfunction(v)
+    )
+    if len(ownMethods) < min_methods:
+        checkfail(f"Class defines at least {min_methods} method(s)",
+                   f"Found {len(ownMethods)}: {ownMethods}")
+        return False, lines
+    checkpass(f"Class defines at least {min_methods} method(s) ({len(ownMethods)} found: {', '.join(ownMethods)})")
+
+    if model_file:
+        try:
+            modelNamespace = runpy.run_path(model_file)
+        except Exception as e:
+            checkfail("Path matches model solution", f"Could not run the model solution file: {e}")
+            return False, lines
+        modelClass = modelNamespace.get(class_name)
+        if modelClass is None or solving_method is None:
+            checkfail("Path matches model solution",
+                       "Model comparison misconfigured - check model_file/solving_method.")
+            return False, lines
+
+        def _isolatedPath(cls):
+            # Calls solving_method directly on a fresh instance - not the full
+            # main.py run captured in `history` above, which may include extra
+            # calls after the solving method (e.g. turnOff()) that the model's
+            # isolated run never makes, throwing off a length-based comparison.
+            # Re-fetch world fresh each call - running the first isolated call
+            # can consume/place beepers the second one needs a clean slate for.
+            from karel.robota import world as _world
+            if world_setup:
+                world_setup(_world)
+            r = cls(*start_state)
+            getattr(r, solving_method)()
+            return [(s.street(), s.avenue()) for s in util.getStateHistory(r)]
+
+        try:
+            studentPath = _isolatedPath(robotClass)
+        except Exception as e:
+            checkfail("Path matches model solution",
+                       f"Your {solving_method}() raised an exception when called directly: {e}")
+            return False, lines
+        try:
+            modelPath = _isolatedPath(modelClass)
+        except Exception as e:
+            checkfail("Path matches model solution", f"Model solution raised an exception: {e}")
+            return False, lines
+        if studentPath != modelPath:
+            checkfail("Path matches model solution",
+                       f"Paths diverge - yours has {len(studentPath)} step(s), model has {len(modelPath)}.")
+            return False, lines
+        checkpass("Path matches model solution")
+
+    return True, lines
