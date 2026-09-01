@@ -1,6 +1,7 @@
 # generic value v. expected test
 from karel.robota import *
 import karel.robotutils as util
+import ast
 import inspect
 import os
 import runpy
@@ -295,6 +296,44 @@ def testMainGuardPurity(test_name, mainFilePath, exemptActions=None, allowedMeth
 
     return namespace, result
 
+def findGlobalInstanceMisuse(main_file, class_name, robot_var):
+    """Static check (no code runs) for a common novice mistake: a method that
+    calls robot_var.something() instead of self.something() - reaching for the
+    global instance from main by name, rather than the instance the method is
+    actually being called on.
+
+    This is easy to miss by eye because it *works* when the program is simply
+    run: main.py's own robot_var already exists as a global by the time any
+    method executes, so Python happily resolves it. It falls apart the moment
+    the method is called on a different instance (a second robot of the same
+    class, or a grader constructing its own fresh instance to test the method
+    in isolation) - the method keeps operating on the original global instead
+    of self, which is exactly the kind of bug that "sometimes" passes and
+    "sometimes" doesn't, depending on what state that original happens to be
+    in when the method runs.
+
+    Returns a list of (methodName, calledAttr, lineNumber) tuples - one per
+    robot_var.calledAttr() call found inside a method of class_name. Empty
+    list means none found (or the file couldn't be parsed - a syntax error
+    there will already have been reported elsewhere).
+    """
+    try:
+        tree = ast.parse(open(main_file).read(), filename=main_file)
+    except Exception:
+        return []
+
+    offenses = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == class_name:
+            for item in node.body:
+                if isinstance(item, ast.FunctionDef):
+                    for sub in ast.walk(item):
+                        if (isinstance(sub, ast.Attribute)
+                                and isinstance(sub.value, ast.Name)
+                                and sub.value.id == robot_var):
+                            offenses.append((item.name, sub.attr, sub.lineno))
+    return offenses
+
 def runRobotChecklist(class_name, robot_var, start_state, end_state, min_methods,
                        solving_method=None, model_file=None, world_setup=None,
                        main_file="main.py"):
@@ -304,16 +343,21 @@ def runRobotChecklist(class_name, robot_var, start_state, end_state, min_methods
       1. Program runs without crashing
       2. Class <class_name> exists
       3. Robot named <robot_var> was created in main
-      4. Starting state matches start_state
-      5. Ending state matches end_state
-      6. Class defines at least min_methods of its own methods
-      7. (only if solving_method is given) solving_method() reaches end_state
+      4. No method calls <robot_var>.something() instead of self.something() -
+         a common mistake (reaching for the global instance from main instead
+         of the instance the method's actually being called on) that runs fine
+         normally but breaks unpredictably once a method is called on any other
+         instance, including the fresh one the checks below construct.
+      5. Starting state matches start_state
+      6. Ending state matches end_state
+      7. Class defines at least min_methods of its own methods
+      8. (only if solving_method is given) solving_method() reaches end_state
          all on its own, called directly on a fresh instance - main.py's overall
-         run already reached the right answer (step 5 passed), so if the
+         run already reached the right answer (step 6 passed), so if the
          designated method *alone* doesn't get there too, that's proof main.py
          has extra work of its own propping the result up instead of leaving it
          all to that one method.
-      8. (only if model_file is also given) that same isolated run's path
+      9. (only if model_file is also given) that same isolated run's path
          matches the model solution's, called the same way.
 
     start_state/end_state are (street, avenue, direction, beepers) tuples, same
@@ -390,6 +434,23 @@ def runRobotChecklist(class_name, robot_var, start_state, end_state, min_methods
                    f"{main_file} should create a {class_name} instance named '{robot_var}'.")
         return False, lines
     checkpass(f"Robot named '{robot_var}' created in __main__")
+
+    misuse = findGlobalInstanceMisuse(main_file, class_name, robot_var)
+    if misuse:
+        methodName, calledAttr, lineno = misuse[0]
+        checkfail(
+            "Methods use self, not the global instance",
+            f"Line {lineno}: {methodName}() calls {robot_var}.{calledAttr}() - it should be "
+            f"self.{calledAttr}() instead. Using '{robot_var}' directly reaches for the "
+            f"specific robot you made in __main__, rather than whichever robot the method "
+            f"is actually being called on - self is always the right one. This kind of bug "
+            f"can look like it works when you just click Run, since '{robot_var}' already "
+            f"exists as a global by the time your method runs - but it breaks (often "
+            f"unpredictably) the moment the method is used on any other instance, including "
+            f"the fresh one the grading tests construct to check your method on its own."
+        )
+        return False, lines
+    checkpass("Methods use self, not the global instance")
 
     history = util.getStateHistory(robot)
     initial = history[0]
