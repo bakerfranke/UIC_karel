@@ -256,7 +256,7 @@ class RobotWorld(RobotWorldBase, Observer) :
             beepers = state.beepers()
             beepersStr = "inf" if beepers == infinity else f"{beepers:<3d}"
             lines.append(
-                f"#{robotID} {costume} {state.street():2d} {state.avenue():0d} "
+                f"{robotID} {costume:<9} {state.street():<2d} {state.avenue():<2d}"
                 f"{dirChar} {beepersStr}"
             )
 
@@ -444,6 +444,18 @@ class RobotWorld(RobotWorldBase, Observer) :
             world.setSize(10, 10)  # Default world size
             world.setDelay(20)  # Default animation delay
             _window.update()  # Refresh the graphics window
+
+            # Keep the window open after the script's own code finishes - same
+            # mechanism UrRobot._initialize_graphics() registers when a robot gets
+            # constructed. Without this, a program that only ever calls world-level
+            # methods (readWorld()/setSize()/etc.) and never constructs a robot would
+            # draw the window, then the process would exit immediately afterward
+            # (nothing else keeps it alive), closing the window before anyone could
+            # actually see it.
+            import atexit
+            def default_task():
+                pass
+            atexit.register(lambda: _window.run(default_task))
 
     def readWorld(self, filename):
         """Read the world configuration from a file and initialize graphics if needed."""
