@@ -334,6 +334,90 @@ def findGlobalInstanceMisuse(main_file, class_name, robot_var):
                             offenses.append((item.name, sub.attr, sub.lineno))
     return offenses
 
+def findExecutableCodeOutsideMainGuard(main_file):
+    """Static check (no code runs) for executable statements sitting at module
+    level in main.py, outside both any class/function definition and the
+    `if __name__ == "__main__":` block - a common mistake where code meant to be
+    inside the guard gets left un-indented by accident, e.g.:
+
+        if __name__ == "__main__":
+            world.readWorld("garden_walls.kwld")
+
+        gardy = GardenerBot(1, 2, North, 80)   # <- accidentally outside the guard
+        gardy.plantAllFlowers()
+
+    This kind of code runs unconditionally every time the file is imported or
+    inspected - not just when a student clicks Run - since Python executes
+    module-level code regardless of __name__. That means it also runs during
+    every test that so much as imports the file to look at the class, often
+    more than once across different tests. Depending on what the code
+    constructs, that can silently double up world state (a second, real
+    plantAllFlowers() run stacking beepers on top of a test's own isolated
+    run) or attempt to open a real graphics window on a headless grading
+    server (a crash, or - since a robot being constructed also registers a
+    "keep the window open" exit hook - a hang, waiting for a window nobody
+    is there to close).
+
+    Returns a list of (lineno, source_snippet) tuples, one per offending
+    top-level statement. Empty list means main.py is structured correctly (or
+    couldn't be parsed - a syntax error there is already reported elsewhere).
+    """
+    try:
+        source = open(main_file).read()
+        tree = ast.parse(source, filename=main_file)
+    except Exception:
+        return []
+
+    def isMainGuard(node):
+        if not isinstance(node, ast.If):
+            return False
+        test = node.test
+        if not (isinstance(test, ast.Compare) and len(test.ops) == 1 and isinstance(test.ops[0], ast.Eq)):
+            return False
+        operands = [test.left] + list(test.comparators)
+        names = [o.id for o in operands if isinstance(o, ast.Name)]
+        strings = [o.value for o in operands if isinstance(o, ast.Constant) and isinstance(o.value, str)]
+        return '__name__' in names and '__main__' in strings
+
+    def isDocstring(node):
+        return (isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant)
+                and isinstance(node.value.value, str))
+
+    offenses = []
+    for node in tree.body:
+        if isinstance(node, (ast.Import, ast.ImportFrom, ast.ClassDef, ast.FunctionDef)):
+            continue
+        if isDocstring(node) or isMainGuard(node):
+            continue
+        snippet = ast.get_source_segment(source, node) or ""
+        snippet = snippet.strip().splitlines()[0] if snippet.strip() else "(code)"
+        offenses.append((node.lineno, snippet))
+    return offenses
+
+def checkNoCodeOutsideMainGuard(main_file="main.py"):
+    """Convenience wrapper around findExecutableCodeOutsideMainGuard() for use as
+    an early guard at the very top of a test's test_passed() - before running
+    main.py in any way. Prints a clear explanation and returns False if a
+    problem is found; returns True (silently) otherwise."""
+    offenses = findExecutableCodeOutsideMainGuard(main_file)
+    if not offenses:
+        return True
+    print(
+        f'ERROR: {main_file} has code outside both your class definition(s) and '
+        f'the `if __name__ == "__main__":` guard:'
+    )
+    for lineno, snippet in offenses:
+        print(f"  line {lineno}: {snippet}")
+    print(
+        "This code runs every time the file is imported or inspected - not just "
+        "when you click Run - which can cause confusing test failures (like "
+        'beepers appearing doubled, or crashes/hangs trying to open a graphics '
+        'window during grading). Move this code inside the '
+        '`if __name__ == "__main__":` block, indented to match the other lines '
+        "already there."
+    )
+    return False
+
 def runRobotChecklist(class_name, robot_var, start_state, end_state, min_methods,
                        solving_method=None, model_file=None, world_setup=None,
                        main_file="main.py"):
