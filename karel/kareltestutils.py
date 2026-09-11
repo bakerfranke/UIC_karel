@@ -479,6 +479,104 @@ def checkBeeperConservation(main_file, world_files, class_name, solving_method, 
     return True
 
 
+def runMultiWorldCompare(main_file, model_file, class_name, world_files, mode,
+                          solving_method=None, start_state=None, verbose=True):
+    """Runs main_file against every world file in world_files, comparing the
+    resulting world beeper layout to a live run of model_file done the same
+    way on the same world file. Reports the first world file where they
+    diverge, in enough detail to reproduce and debug it; returns True only if
+    every world file matches.
+
+    mode="main": runs the whole file each time (via its own `__main__` guard,
+        same as `python main.py` would) - no start_state needed, since
+        main_file/model_file each construct their own robot(s) however they
+        like.
+    mode="method": constructs a fresh class_name(*start_state) instance
+        directly, bypassing __main__ entirely, and calls solving_method() on
+        it - start_state and solving_method are both required for this mode.
+
+    Forces headless mode and fully resets the world (world.reset(), which
+    clears beepers, walls, and robots) before every single load, so state from
+    one file or run can never leak into the next.
+    """
+    world = UrRobot.use_graphics(False)
+
+    def _loadWorld(world_file):
+        world.reset()
+        world.setTrace(False)
+        world.readWorld(world_file)
+
+    def _runViaMain(file_path):
+        # _loadWorld() already loaded the intended world_file just before this
+        # call. But main_file/model_file each hardcode their own readWorld()
+        # call inside __main__ (every project's starter template does this) -
+        # and since readWorld() is additive rather than replacing, letting that
+        # hardcoded call run for real would pile whatever file THEY happen to
+        # name on top of the world_file this iteration is actually testing,
+        # regardless of which of the 10 world_files we're nominally on. Neutralize
+        # it for the duration of this run so the already-loaded world_file sticks.
+        original_readWorld = world.readWorld
+        world.readWorld = lambda *args, **kwargs: None
+        try:
+            namespace, _violations = runMainOnly(file_path)
+        finally:
+            world.readWorld = original_readWorld
+        return namespace
+
+    def _runViaMethod(file_path):
+        try:
+            namespace = runpy.run_path(file_path)
+        except Exception as e:
+            print(f"ERROR: could not run {file_path}: {e}")
+            return None
+        cls = namespace.get(class_name)
+        if cls is None:
+            print(f"ERROR: could not find a class named {class_name} in {file_path}.")
+            return None
+        original_sleep = UrRobot.sleep
+        UrRobot.sleep = lambda self: None
+        try:
+            r = cls(*start_state)
+            getattr(r, solving_method)()
+        except Exception as e:
+            print(f"ERROR: calling {solving_method}() from {file_path} raised an exception: {e}")
+            return None
+        finally:
+            UrRobot.sleep = original_sleep
+        return namespace
+
+    runFile = _runViaMain if mode == "main" else _runViaMethod
+
+    for world_file in world_files:
+        _loadWorld(world_file)
+        if runFile(model_file) is None:
+            print(f"ERROR: the model solution itself failed on {world_file} - check with your instructor.")
+            return False
+        expectedBeepers = dict(world.getAllBeepers())
+
+        _loadWorld(world_file)
+        if runFile(main_file) is None:
+            return False  # already reported by runFile
+        actualBeepers = dict(world.getAllBeepers())
+
+        diffs = util.get_beeper_diffs(actualBeepers, expectedBeepers)
+        if diffs['diffs']:
+            print(
+                f"{'-'*70}\n"
+                f"TEST: World file {world_file}\n"
+                f"Your result doesn't match the model solution on this world file.\n"
+                f"   Num beepers found: {diffs['num_beepers_in_world']}\n"
+                f"Num beepers expected: {diffs['num_beepers_expected']}\n"
+                f"DIFFERENCES...\n{diffs['allbeeperdiffs']}\n"
+                f"Try re-running your program using {world_file} directly to see what happened."
+            )
+            return False
+        if verbose:
+            print(f"World file {world_file}: matches model solution. (Yay)")
+
+    return True
+
+
 def runRobotChecklist(class_name, robot_var, start_state, end_state, min_methods,
                        solving_method=None, model_file=None, world_setup=None,
                        main_file="main.py"):
