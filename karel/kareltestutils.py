@@ -418,6 +418,67 @@ def checkNoCodeOutsideMainGuard(main_file="main.py"):
     )
     return False
 
+def checkBeeperConservation(main_file, world_files, class_name, solving_method, start_state, verbose=True):
+    """For each world file, checks that calling solving_method() on a fresh
+    class_name(*start_state) instance doesn't change the TOTAL number of
+    beepers anywhere in the world - for assignments that only rearrange
+    existing beepers (like sorting them) rather than adding or removing any.
+
+    Deliberately bypasses main_file's own `if __name__ == "__main__":` guard
+    (the same way runMultiWorldCompare's mode="method" does) rather than
+    using runMainOnly() - every project's main.py hardcodes its own
+    readWorld() call inside that guard, and since readWorld() is additive
+    (it adds to whatever's already there, rather than clearing first), letting
+    that guard run would silently add main.py's own hardcoded world on top of
+    whichever world_file this function just loaded, corrupting the "before"
+    count this check depends on.
+
+    Forces headless mode and fully resets the world before each world file."""
+    world = UrRobot.use_graphics(False)
+    for world_file in world_files:
+        world.reset()
+        world.setTrace(False)
+        world.readWorld(world_file)
+        before = sum(world.getAllBeepers().values())
+
+        try:
+            namespace = runpy.run_path(main_file)
+        except Exception as e:
+            print(f"ERROR: could not import {main_file}: {e}")
+            return False
+        cls = namespace.get(class_name)
+        if cls is None:
+            print(f"ERROR: could not find a class named {class_name} in {main_file}.")
+            return False
+        original_sleep = UrRobot.sleep
+        UrRobot.sleep = lambda self: None
+        try:
+            bot = cls(*start_state)
+            getattr(bot, solving_method)()
+        except Exception as e:
+            print(f"ERROR: calling {solving_method}() raised an exception: {e}")
+            return False
+        finally:
+            UrRobot.sleep = original_sleep
+
+        after = sum(world.getAllBeepers().values())
+
+        if before != after:
+            print(
+                f"{'-'*70}\n"
+                f"TEST: Beeper conservation - {world_file}\n"
+                f"Beepers before running your program: {before}\n"
+                f" Beepers after running your program: {after}\n"
+                f"Your program should only rearrange beepers, never add or remove them - "
+                f"check for a stray putBeeper() or pickBeeper() that isn't paired correctly. "
+                f"Try re-running your program using {world_file} directly to see what happened."
+            )
+            return False
+        if verbose:
+            print(f"World file {world_file}: beeper count conserved ({before}). (Yay)")
+    return True
+
+
 def runRobotChecklist(class_name, robot_var, start_state, end_state, min_methods,
                        solving_method=None, model_file=None, world_setup=None,
                        main_file="main.py"):
@@ -638,4 +699,3 @@ def runRobotChecklist(class_name, robot_var, start_state, end_state, min_methods
                 return False, lines
             checkpass("Path matches model solution")
 
-    return True, lines
