@@ -1,0 +1,1 @@
+from tests import test_starting_beeper_count as test_passed
