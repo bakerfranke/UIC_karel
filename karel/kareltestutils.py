@@ -1,6 +1,7 @@
 # generic value v. expected test
 from karel.robota import *
 import karel.robotutils as util
+from karel.code_parser import extract_method_headers_from_file
 import ast
 import inspect
 import os
@@ -137,6 +138,64 @@ def testClassMethodExists(classname, expectedMethod, verbose=True):
                         hasMethod,
                         expectedMethod+"()", verbose)
     return result
+
+def checkClassAndMethodsExist(main_file, class_name, method_list, verbose=True):
+    """Runs main_file, finds class_name in it, and checks that every method in
+    method_list exists on it - via testClassMethodExists() for each one. Use
+    this as an early guard at the top of a test's test_passed(), before
+    anything else tries to construct or run the class."""
+    try:
+        namespace = runpy.run_path(main_file)
+    except Exception as e:
+        print(f"ERROR: {main_file} raised an exception: {e}")
+        return False
+
+    cls = namespace.get(class_name)
+    if cls is None:
+        print(f"ERROR: could not find a class named {class_name} in {main_file} - did you rename or remove it?")
+        return False
+
+    for m in method_list:
+        if not testClassMethodExists(cls, m, verbose=False):
+            print(f"Your class should contain the following method(s): {method_list}")
+            print(f"Your code is missing: {m} - did you change it or delete it?")
+            return False
+
+    return True
+
+def checkMethodCount(main_file, class_name, required_method_headers, min_total_methods, verbose=True):
+    """Static check (no code runs) that class_name in main_file defines at
+    least min_total_methods methods total, and that every header string in
+    required_method_headers (e.g. 'def runRace(self):') is among them. Uses
+    extract_method_headers_from_file() - a pure header count, not a check that
+    the methods are actually called (see runRobotChecklist's min_methods /
+    the "defined AND called" pattern used elsewhere for that stricter check)."""
+    methods = extract_method_headers_from_file(
+        main_file,
+        class_filter={class_name},
+        include_dunder=False,
+        include_private=False,
+    )
+
+    print("-" * 30)
+    print(f"Inspecting code in {main_file}:\n{len(methods)} methods found in class {class_name}:")
+    required_count = 0
+    for i, m in enumerate(methods, start=1):
+        checkmark = " ✅" if m.header in required_method_headers else ""
+        if checkmark:
+            required_count += 1
+        print(f"{i}. line {m.lineno}: {m.header}{checkmark}")
+
+    has_required_num_methods = len(methods) >= min_total_methods
+    has_required_named_methods = required_count == len(required_method_headers)
+
+    num_status = "✅" if has_required_num_methods else f"❌ expected ≥{min_total_methods} methods - found {len(methods)}."
+    req_status = "✅" if has_required_named_methods else f"❌\n\tYour code is missing one of these: {required_method_headers}"
+    print("-" * 30)
+    print(f"Test: required number of methods? {num_status}")
+    print(f"Test: required methods present? {req_status}")
+
+    return has_required_num_methods and has_required_named_methods
 
 def testWorldEquals(test_name, robot_world:RobotWorld, world_kwld_file:str):
     diffs = util.get_world_diffs_from_file(robot_world, world_kwld_file)
@@ -418,66 +477,243 @@ def checkNoCodeOutsideMainGuard(main_file="main.py"):
     )
     return False
 
-def checkBeeperConservation(main_file, world_files, class_name, solving_method, start_state, verbose=True):
-    """For each world file, checks that calling solving_method() on a fresh
-    class_name(*start_state) instance doesn't change the TOTAL number of
-    beepers anywhere in the world - for assignments that only rearrange
-    existing beepers (like sorting them) rather than adding or removing any.
-
-    Deliberately bypasses main_file's own `if __name__ == "__main__":` guard
-    (the same way runMultiWorldCompare's mode="method" does) rather than
-    using runMainOnly() - every project's main.py hardcodes its own
-    readWorld() call inside that guard, and since readWorld() is additive
-    (it adds to whatever's already there, rather than clearing first), letting
-    that guard run would silently add main.py's own hardcoded world on top of
-    whichever world_file this function just loaded, corrupting the "before"
-    count this check depends on.
-
-    Forces headless mode and fully resets the world before each world file."""
-    world = UrRobot.use_graphics(False)
-    for world_file in world_files:
-        world.reset()
-        world.setTrace(False)
-        world.readWorld(world_file)
-        before = sum(world.getAllBeepers().values())
-
-        try:
-            namespace = runpy.run_path(main_file)
-        except Exception as e:
-            print(f"ERROR: could not import {main_file}: {e}")
-            return False
-        cls = namespace.get(class_name)
-        if cls is None:
-            print(f"ERROR: could not find a class named {class_name} in {main_file}.")
-            return False
-        original_sleep = UrRobot.sleep
-        UrRobot.sleep = lambda self: None
-        try:
-            bot = cls(*start_state)
-            getattr(bot, solving_method)()
-        except Exception as e:
-            print(f"ERROR: calling {solving_method}() raised an exception: {e}")
-            return False
-        finally:
-            UrRobot.sleep = original_sleep
-
-        after = sum(world.getAllBeepers().values())
-
-        if before != after:
-            print(
-                f"{'-'*70}\n"
-                f"TEST: Beeper conservation - {world_file}\n"
-                f"Beepers before running your program: {before}\n"
-                f" Beepers after running your program: {after}\n"
-                f"Your program should only rearrange beepers, never add or remove them - "
-                f"check for a stray putBeeper() or pickBeeper() that isn't paired correctly. "
-                f"Try re-running your program using {world_file} directly to see what happened."
-            )
-            return False
-        if verbose:
-            print(f"World file {world_file}: beeper count conserved ({before}). (Yay)")
+def _isAllowedRangeFor(node):
+    """True if this ast.For node is exactly `for <var> in range(<int>):` - one
+    positional argument, no keywords, no starred args - the only for-loop shape
+    allowed in this project (repeat something a fixed number of times). Any
+    other iterable (a list, range() with start/stop/step, enumerate(), etc.)
+    returns False."""
+    call = node.iter
+    if not isinstance(call, ast.Call):
+        return False
+    if not (isinstance(call.func, ast.Name) and call.func.id == "range"):
+        return False
+    if call.keywords:
+        return False
+    if len(call.args) != 1:
+        return False
+    if any(isinstance(a, ast.Starred) for a in call.args):
+        return False
     return True
 
+def findLoopUsage(main_file):
+    """Static check (no code runs) for disallowed loops anywhere in the file -
+    `while` loops are never allowed; `for` loops are only allowed in the exact
+    shape `for <var> in range(<int>):` (repeating something a fixed number of
+    times) - any other for-loop shape (over a list, range() with start/stop/
+    step, enumerate(), etc.) is flagged too. Walks the whole file, not just
+    module level, so a loop hidden inside a method is caught.
+
+    Returns a list of (lineno, kind, source_snippet) tuples, kind being "while"
+    or "for". Empty list means no disallowed loop was found (or the file
+    couldn't be parsed - a syntax error there is already reported elsewhere)."""
+    try:
+        source = open(main_file).read()
+        tree = ast.parse(source, filename=main_file)
+    except Exception:
+        return []
+
+    offenses = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.While):
+            kind = "while"
+        elif isinstance(node, ast.For):
+            if _isAllowedRangeFor(node):
+                continue
+            kind = "for"
+        else:
+            continue
+        snippet = ast.get_source_segment(source, node) or ""
+        snippet = snippet.strip().splitlines()[0] if snippet.strip() else "(loop)"
+        offenses.append((node.lineno, kind, snippet))
+    return offenses
+
+def checkNoLoops(main_file="main.py"):
+    """Convenience wrapper around findLoopUsage() for use as an early guard at
+    the top of a test's test_passed(). `while` loops are never allowed; `for`
+    loops are only allowed as `for <var> in range(<int>):` (a fixed repeat
+    count) - using one isn't required, just permitted. Prints a clear
+    explanation and returns False if a disallowed loop is found anywhere in
+    the file; returns True (silently) otherwise."""
+    offenses = findLoopUsage(main_file)
+    if not offenses:
+        return True
+    print(f"ERROR: {main_file} uses a loop that isn't allowed in this project:")
+    for lineno, kind, snippet in offenses:
+        print(f"  line {lineno} ({kind} loop): {snippet}")
+    kinds = {kind for _lineno, kind, _snippet in offenses}
+    if "while" in kinds:
+        print(
+            "`while` loops are not allowed in this project - replace this with a "
+            "bounded sequence of if-statements, or a `for <var> in range(<int>):` "
+            "loop if you just need to repeat something a fixed number of times."
+        )
+    if "for" in kinds:
+        print(
+            "Use of a for loop, but for this project we're only using the form "
+            "that lets you repeat an instruction a certain number of times: "
+            "`for <var> in range(<int>):`. Any other for-loop form (looping over "
+            "a list, range() with a start/stop/step, enumerate(), etc.) isn't "
+            "allowed here."
+        )
+    return False
+
+def runMainInstrumented(main_file):
+    """Like runMainOnly(), but for assignments where students may construct as
+    many robots (of as many classes) as they like, so a check can't just look
+    up one exact variable name in the namespace. Tracks every UrRobot (or
+    subclass) instance constructed during the run, each one's beeper count at
+    construction time, and every pickBeeper() call made by any of them -
+    regardless of which class or variable is involved.
+
+    Forces headless mode and neutralizes UrRobot.sleep() the same way
+    runMainOnly() does.
+
+    Returns (namespace, instances, initialBeeperCounts, pickBeeperCalls, topLevelFlags):
+      instances            - every UrRobot (or subclass) instance constructed,
+                              in construction order.
+      initialBeeperCounts  - parallel list of ints, the beepers argument each
+                              one was constructed with (an unlimited/infinity
+                              count is reported as -1, since it can't be summed
+                              meaningfully with a finite total).
+      pickBeeperCalls      - one human-readable string per pickBeeper() call
+                              made anywhere during the run, by any instance.
+      topLevelFlags        - parallel list of bools, one per entry in
+                              instances - True if that robot was constructed
+                              directly at module level in main_file (i.e. from
+                              __main__ itself, not from inside a method).
+
+    namespace is None (with the other lists whatever was captured before the
+    crash) if main.py raised an exception instead of completing.
+    """
+    mainFilePath = os.path.abspath(main_file)
+    UrRobot.use_graphics(False)
+
+    instances = []
+    initialBeeperCounts = []
+    pickBeeperCalls = []
+    topLevelFlags = []
+
+    originalInit = UrRobot.__init__
+    def _instrumentedInit(self, *args, **kwargs):
+        originalInit(self, *args, **kwargs)
+        instances.append(self)
+        count = self._UrRobot__beepers
+        initialBeeperCounts.append(-1 if count == infinity else count)
+        # Robot.__init__ calls UrRobot.__init__(self, ...) directly rather than
+        # via super() - so for a Robot subclass, the immediate caller of this
+        # patched UrRobot.__init__ is Robot.__init__'s own frame, not whatever
+        # called TinyBot(...). Walk past any chain of __init__ frames (however
+        # many levels of subclassing are involved) to find the real caller.
+        callerFrame = inspect.currentframe().f_back
+        while callerFrame is not None and callerFrame.f_code.co_name == '__init__':
+            callerFrame = callerFrame.f_back
+        topLevelFlags.append(
+            callerFrame is not None
+            and callerFrame.f_code.co_filename == mainFilePath
+            and callerFrame.f_code.co_name == '<module>'
+        )
+
+    originalPerform = UrRobot._perform_action
+    def _instrumentedPerform(self, action, *args, **kwargs):
+        if action == UrRobot.pickBeeperAction:
+            pickBeeperCalls.append(f"{type(self).__name__} instance called pickBeeper()")
+        return originalPerform(self, action, *args, **kwargs)
+
+    UrRobot.__init__ = _instrumentedInit
+    UrRobot._perform_action = _instrumentedPerform
+    original_sleep = UrRobot.sleep
+    UrRobot.sleep = lambda self: None
+    try:
+        namespace = runpy.run_path(mainFilePath, run_name="__main__")
+    except Exception as e:
+        print(f"ERROR: your main.py raised an exception instead of completing: {e}")
+        return None, instances, initialBeeperCounts, pickBeeperCalls, topLevelFlags
+    finally:
+        UrRobot.__init__ = originalInit
+        UrRobot._perform_action = originalPerform
+        UrRobot.sleep = original_sleep
+
+    return namespace, instances, initialBeeperCounts, pickBeeperCalls, topLevelFlags
+
+def checkSingleRobotInMain(main_file, class_name, verbose=True):
+    """Checks that __main__ constructs exactly one robot - directly at module
+    level in main_file, not from inside a method - and that it's an instance
+    of class_name. Meant to pair with testMainGuardPurity(): together they
+    cover "main should do nothing except construct a single <class_name> and
+    call <solving_method>()." A robot constructed inside a method (e.g. a
+    helper robot sortBeepers() itself spins up) doesn't count against this -
+    only what __main__ directly constructs matters here."""
+    namespace, instances, _counts, _picks, topLevelFlags = runMainInstrumented(main_file)
+    if namespace is None:
+        return False
+
+    topLevelInstances = [inst for inst, isTop in zip(instances, topLevelFlags) if isTop]
+    result = len(topLevelInstances) == 1 and isinstance(topLevelInstances[0], namespace.get(class_name) or ())
+    display_str = (
+        f"{'-'*70}\n"
+        f"TEST: __main__ constructs a single {class_name}\n"
+        f"Robot(s) constructed directly in __main__: {len(topLevelInstances)} "
+        f"({[type(r).__name__ for r in topLevelInstances]})\n"
+        f"                 Pass: {result}"
+    )
+    if result == False or verbose == True:
+        print(display_str)
+    return result
+
+def checkStartingBeeperCount(main_file, expected_total, verbose=True):
+    """Runs main.py and checks that the TOTAL beeper count, summed across every
+    UrRobot (or subclass) instance constructed anywhere in the run, equals
+    expected_total. Works no matter how many robots or classes the student
+    uses - only the grand total is checked."""
+    namespace, instances, counts, _pickBeeperCalls, _topLevelFlags = runMainInstrumented(main_file)
+    if namespace is None:
+        return False
+
+    if not instances:
+        print(f"ERROR: no robot instances were constructed while running {main_file}.")
+        return False
+
+    if -1 in counts:
+        print(
+            f"ERROR: one of your robots was constructed with an unlimited (infinite) "
+            f"beeper count. This assignment requires an exact starting total of "
+            f"{expected_total} beepers, so every robot needs a specific, finite count."
+        )
+        return False
+
+    total = sum(counts)
+    result = total == expected_total
+    display_str = (
+        f"{'-'*70}\n"
+        f"TEST: Starting beeper count\n"
+        f"Robot(s) constructed: {len(instances)}, beeper count(s): {counts}\n"
+        f"        Total beepers: {total}\n"
+        f"             Expected: {expected_total}\n"
+        f"                 Pass: {result}"
+    )
+    if result == False or verbose == True:
+        print(display_str)
+    return result
+
+def checkNoPickBeeperCalled(main_file, verbose=True):
+    """Runs main.py and checks that pickBeeper() was never called, by any
+    robot, of any class, anywhere in the run."""
+    namespace, _instances, _counts, pickBeeperCalls, _topLevelFlags = runMainInstrumented(main_file)
+    if namespace is None:
+        return False
+
+    result = len(pickBeeperCalls) == 0
+    if not result:
+        print(
+            f"ERROR: pickBeeper() was called {len(pickBeeperCalls)} time(s) during your "
+            f"run, but this assignment should never need to pick a beeper back up - "
+            f"you're placing beepers, not removing them. Calling pickBeeper() anywhere "
+            f"is a sign your approach has gone sideways somewhere."
+        )
+    elif verbose:
+        print("pickBeeper() was never called - correct!")
+    return result
 
 def runMultiWorldCompare(main_file, model_file, class_name, world_files, mode,
                           solving_method=None, start_state=None, verbose=True):
@@ -576,6 +812,212 @@ def runMultiWorldCompare(main_file, model_file, class_name, world_files, mode,
 
     return True
 
+def describePathDivergence(studentHistory, modelHistory):
+    """Compares the (street, avenue) path implied by two RobotState histories
+    (as returned by util.getStateHistory()) - ignoring direction, beepers, and
+    exactly how many turns/actions it took to get there, so a student who
+    solves it with a different (but equally correct) sequence of turns still
+    matches. Returns None if the paths match exactly, or a detail string
+    describing where and how they first diverge otherwise."""
+    studentPath = [(s.street(), s.avenue()) for s in studentHistory]
+    modelPath = [(s.street(), s.avenue()) for s in modelHistory]
+    if studentPath == modelPath:
+        return None
+
+    detail = f"Paths diverge - yours has {len(studentPath)} step(s), model has {len(modelPath)}."
+
+    # Find the first index where the two actually differ, so far as both have a
+    # step to compare - if they agree everywhere they overlap, the "divergence"
+    # is really just one path continuing past where the other stopped, so treat
+    # right-after-the-last-shared-step as where they diverge.
+    minLen = min(len(studentPath), len(modelPath))
+    divergeAt = next((i for i in range(minLen) if studentPath[i] != modelPath[i]), minLen)
+
+    if divergeAt > 0:
+        lastShared = studentHistory[divergeAt - 1]
+        detail += (f"\nStep {divergeAt - 1} (last step you both agree on): "
+                   f"{status_tuple_str((lastShared.street(), lastShared.avenue(), lastShared.direction(), lastShared.beepers()))}")
+
+    if divergeAt < len(studentHistory):
+        yours = studentHistory[divergeAt]
+        detail += (f"\nStep {divergeAt} (yours): "
+                   f"{status_tuple_str((yours.street(), yours.avenue(), yours.direction(), yours.beepers()))}")
+    else:
+        detail += f"\nStep {divergeAt}: your path ended here."
+
+    if divergeAt < len(modelHistory):
+        models = modelHistory[divergeAt]
+        detail += (f"\nStep {divergeAt} (model): "
+                   f"{status_tuple_str((models.street(), models.avenue(), models.direction(), models.beepers()))}")
+    else:
+        detail += f"\nStep {divergeAt}: the model solution's path ended here."
+
+    return detail
+
+def runMultiWorldPathCompare(main_file, model_file, class_name, world_files, mode,
+                              solving_method=None, start_state=None, robot_var=None,
+                              verbose=True):
+    """Like runMultiWorldCompare(), but compares the (street, avenue) PATH each
+    robot follows - via describePathDivergence() - rather than the final
+    world's beeper layout. Useful when matching the final state alone isn't
+    precise enough (e.g. "total beepers reaches 0" doesn't prove they were
+    picked up along the right route) - the two paths don't need the same total
+    number of actions (turns don't move the robot, so they're naturally
+    invisible to a path comparison), just the same sequence of corners visited.
+
+    mode="main": runs the whole file each time (via its own `__main__` guard,
+        same as `python main.py` would). Since main_file/model_file each
+        construct their own robot(s) however they like, robot_var names the
+        global variable holding the robot to check (e.g. "hurley") - if left
+        as None, the single UrRobot (or subclass) instance found in the
+        namespace is used, which only works when exactly one robot is
+        constructed.
+    mode="method": constructs a fresh class_name(*start_state) instance
+        directly, bypassing __main__ entirely, and calls solving_method() on
+        it - start_state and solving_method are both required for this mode.
+
+    Forces headless mode and fully resets the world before every single load.
+    """
+    world = UrRobot.use_graphics(False)
+
+    def _loadWorld(world_file):
+        world.reset()
+        world.setTrace(False)
+        world.readWorld(world_file)
+
+    def _findRobot(namespace):
+        if robot_var is not None:
+            robot = namespace.get(robot_var)
+            if robot is None:
+                print(f"ERROR: could not find a robot named '{robot_var}' in the namespace.")
+            return robot
+        candidates = [v for v in namespace.values() if isinstance(v, UrRobot)]
+        if len(candidates) != 1:
+            print(
+                f"ERROR: expected exactly one robot instance in __main__ to check the path "
+                f"of, found {len(candidates)}. Pass robot_var to disambiguate."
+            )
+            return None
+        return candidates[0]
+
+    def _runViaMain(file_path):
+        namespace, _violations = runMainOnly(file_path)
+        if namespace is None:
+            return None
+        return _findRobot(namespace)
+
+    def _runViaMethod(file_path):
+        try:
+            namespace = runpy.run_path(file_path)
+        except Exception as e:
+            print(f"ERROR: could not run {file_path}: {e}")
+            return None
+        cls = namespace.get(class_name)
+        if cls is None:
+            print(f"ERROR: could not find a class named {class_name} in {file_path}.")
+            return None
+        original_sleep = UrRobot.sleep
+        UrRobot.sleep = lambda self: None
+        try:
+            r = cls(*start_state)
+            getattr(r, solving_method)()
+        except Exception as e:
+            print(f"ERROR: calling {solving_method}() from {file_path} raised an exception: {e}")
+            return None
+        finally:
+            UrRobot.sleep = original_sleep
+        return r
+
+    runFile = _runViaMain if mode == "main" else _runViaMethod
+
+    for world_file in world_files:
+        _loadWorld(world_file)
+        modelRobot = runFile(model_file)
+        if modelRobot is None:
+            print(f"ERROR: the model solution itself failed on {world_file} - check with your instructor.")
+            return False
+        modelHistory = util.getStateHistory(modelRobot)
+
+        _loadWorld(world_file)
+        studentRobot = runFile(main_file)
+        if studentRobot is None:
+            return False  # already reported by runFile
+        studentHistory = util.getStateHistory(studentRobot)
+
+        divergence = describePathDivergence(studentHistory, modelHistory)
+        if divergence:
+            print(
+                f"{'-'*70}\n"
+                f"TEST: World file {world_file} - path check\n"
+                f"Your robot's path doesn't match the model solution's on this world file.\n"
+                f"{divergence}\n"
+                f"Try re-running your program using {world_file} directly to see what happened."
+            )
+            return False
+        if verbose:
+            print(f"World file {world_file}: path matches model solution. (Yay)")
+
+    return True
+
+def checkBeeperConservation(main_file, world_files, class_name, solving_method, start_state, verbose=True):
+    """For each world file, checks that calling solving_method() on a fresh
+    class_name(*start_state) instance doesn't change the TOTAL number of
+    beepers anywhere in the world - for assignments that only rearrange
+    existing beepers (like sorting them) rather than adding or removing any.
+
+    Deliberately bypasses main_file's own `if __name__ == "__main__":` guard
+    (the same way runMultiWorldCompare's mode="method" does) rather than
+    using runMainOnly() - every project's main.py hardcodes its own
+    readWorld() call inside that guard, and since readWorld() is additive
+    (it adds to whatever's already there, rather than clearing first), letting
+    that guard run would silently add main.py's own hardcoded world on top of
+    whichever world_file this function just loaded, corrupting the "before"
+    count this check depends on.
+
+    Forces headless mode and fully resets the world before each world file."""
+    world = UrRobot.use_graphics(False)
+    for world_file in world_files:
+        world.reset()
+        world.setTrace(False)
+        world.readWorld(world_file)
+        before = sum(world.getAllBeepers().values())
+
+        try:
+            namespace = runpy.run_path(main_file)
+        except Exception as e:
+            print(f"ERROR: could not import {main_file}: {e}")
+            return False
+        cls = namespace.get(class_name)
+        if cls is None:
+            print(f"ERROR: could not find a class named {class_name} in {main_file}.")
+            return False
+        original_sleep = UrRobot.sleep
+        UrRobot.sleep = lambda self: None
+        try:
+            bot = cls(*start_state)
+            getattr(bot, solving_method)()
+        except Exception as e:
+            print(f"ERROR: calling {solving_method}() raised an exception: {e}")
+            return False
+        finally:
+            UrRobot.sleep = original_sleep
+
+        after = sum(world.getAllBeepers().values())
+
+        if before != after:
+            print(
+                f"{'-'*70}\n"
+                f"TEST: Beeper conservation - {world_file}\n"
+                f"Beepers before running your program: {before}\n"
+                f" Beepers after running your program: {after}\n"
+                f"Your program should only rearrange beepers, never add or remove them - "
+                f"check for a stray putBeeper() or pickBeeper() that isn't paired correctly. "
+                f"Try re-running your program using {world_file} directly to see what happened."
+            )
+            return False
+        if verbose:
+            print(f"World file {world_file}: beeper count conserved ({before}). (Yay)")
+    return True
 
 def runRobotChecklist(class_name, robot_var, start_state, end_state, min_methods,
                        solving_method=None, model_file=None, world_setup=None,
@@ -761,39 +1203,10 @@ def runRobotChecklist(class_name, robot_var, start_state, end_state, min_methods
                 return False, lines
             studentHistory = util.getStateHistory(isolatedRobot)
             modelHistory = util.getStateHistory(modelRobot)
-            studentPath = [(s.street(), s.avenue()) for s in studentHistory]
-            modelPath = [(s.street(), s.avenue()) for s in modelHistory]
-            if studentPath != modelPath:
-                detail = f"Paths diverge - yours has {len(studentPath)} step(s), model has {len(modelPath)}."
-
-                # Find the first index where the two actually differ, so far as both
-                # have a step to compare - if they agree everywhere they overlap, the
-                # "divergence" is really just one path continuing past where the
-                # other stopped, so treat right-after-the-last-shared-step as where
-                # they diverge.
-                minLen = min(len(studentPath), len(modelPath))
-                divergeAt = next((i for i in range(minLen) if studentPath[i] != modelPath[i]), minLen)
-
-                if divergeAt > 0:
-                    lastShared = studentHistory[divergeAt - 1]
-                    detail += (f"\nStep {divergeAt - 1} (last step you both agree on): "
-                               f"{status_tuple_str((lastShared.street(), lastShared.avenue(), lastShared.direction(), lastShared.beepers()))}")
-
-                if divergeAt < len(studentHistory):
-                    yours = studentHistory[divergeAt]
-                    detail += (f"\nStep {divergeAt} (yours): "
-                               f"{status_tuple_str((yours.street(), yours.avenue(), yours.direction(), yours.beepers()))}")
-                else:
-                    detail += f"\nStep {divergeAt}: your path ended here."
-
-                if divergeAt < len(modelHistory):
-                    models = modelHistory[divergeAt]
-                    detail += (f"\nStep {divergeAt} (model): "
-                               f"{status_tuple_str((models.street(), models.avenue(), models.direction(), models.beepers()))}")
-                else:
-                    detail += f"\nStep {divergeAt}: the model solution's path ended here."
-
-                checkfail("Path matches model solution", detail)
+            divergence = describePathDivergence(studentHistory, modelHistory)
+            if divergence:
+                checkfail("Path matches model solution", divergence)
                 return False, lines
             checkpass("Path matches model solution")
 
+    return True, lines
