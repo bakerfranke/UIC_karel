@@ -1,0 +1,569 @@
+""" Copyright 2008 Joseph Bergin
+License: Creative Commons Attribution-Noncommercial-Share Alike 3.0 United States License
+
+Defines the UrRobot and Robot classes and some associated infrastructure. 
+UrRobots have no predicate methods, hence cannot query the world.
+Robot objects extend UrRobots and have a variety of sensors for learning about their environment.
+"""
+import sys
+import time
+from copy import copy
+#from exceptions import NotImplementedError
+#from exceptions import Exception
+from karel.observable import Observable
+import atexit
+
+from karel.basicdefinitions import North 
+from karel.basicdefinitions import West
+from karel.basicdefinitions import South
+from karel.basicdefinitions import East
+
+from karel.basicdefinitions import infinity 
+from karel.basicdefinitions import legalCorner
+from karel.basicdefinitions import NoBeepers
+from karel.basicdefinitions import IllegalCorner
+
+from karel.basicdefinitions import _nextDirection
+from karel.basicdefinitions import NoBeepersInBeeperBag
+from karel.basicdefinitions import RobotNotRunning
+from karel.basicdefinitions import FrontIsBlocked      
+
+use_graphics = True
+DEBUG = False
+
+# Placeholder imports (will be dynamically set)
+RobotWorld = None
+window = None
+world = None
+
+# Try to load graphics, but allow headless operation
+try:
+    from karel.tkworldadapter import RobotWorld as RW, window as win, world as wd
+    RobotWorld, window, world = RW, win, wd
+except (ImportError, ModuleNotFoundError):
+    # Graphics not available (e.g., no tkinter or headless environment)
+    pass
+
+_window = None
+__robotCount = -1
+
+# Show "check the console" in the toolbar for ANY uncaught error - not just illegal
+# Karel actions (those already show the crash image via UrRobot._crashOut()). Students
+# have to toggle away from the graphics window to see the console, so an uncaught error
+# otherwise just looks like the program silently stopped. Installed unconditionally at
+# import time (rather than lazily alongside window creation) since world.setSize() - the
+# very first call in almost every program - already creates _window on its own, before
+# any robot-creation-triggered lazy init would ever run. The traceback still prints
+# normally; this only adds the toolbar message.
+def _karel_excepthook(exc_type, exc_value, exc_tb):
+    # robota._window only gets synced to the real window once the first robot is
+    # created (via _initialize_graphics()). If the error happens after world.setSize()
+    # but before any robot exists, fall back to tkworldadapter's own _window directly.
+    win = _window
+    if win is None:
+        try:
+            from karel.tkworldadapter import _window as tw_window
+            win = tw_window
+        except ImportError:
+            pass
+    if win is not None and hasattr(win, 'showCrashMessage'):
+        win.showCrashMessage()
+    sys.__excepthook__(exc_type, exc_value, exc_tb)
+
+sys.excepthook = _karel_excepthook
+
+def _incrementRobotCount() :
+    global __robotCount
+    __robotCount += 1
+    return __robotCount
+
+def _check_pause():
+    """Check if execution is paused, handle stepping, and handle startup delay."""
+    global _window
+    if _window is None:
+        return  # No window, no pause checking
+
+    # Handle startup delay on first action
+    if hasattr(_window, '_first_action') and _window._first_action:
+        _window._first_action = False
+        if hasattr(_window, '_startup_delay') and _window._startup_delay > 0:
+            # Sleep for the startup delay
+            start_time = time.time()
+            delay_seconds = _window._startup_delay / 1000.0
+            while time.time() - start_time < delay_seconds:
+                _window.update()  # Keep GUI responsive
+                time.sleep(0.01)
+
+    # Wait while paused, unless stepping (allow_one_step is True). Speed all the way
+    # down to 0 (delay == 100) behaves like paused too - lets someone drop the speed to
+    # 0 and then click Step to walk through the program - but deliberately doesn't touch
+    # is_paused itself, so the Paused overlay/status stays hidden; this isn't a "real"
+    # pause the user asked for, just the speed slider bottoming out.
+    while (_window.is_paused or (world is not None and world.delay() >= 100)) and not _window.allow_one_step:
+        _window.update()  # Update GUI so buttons respond - also picks up live slider drags
+        time.sleep(0.01)  # Small sleep to prevent busy waiting
+
+    # If we broke out due to stepping, consume the step flag
+    if _window.allow_one_step:
+        _window.allow_one_step = False
+
+
+class _RobotSkeleton:
+    """ Defines the basic structure of a simple robot produced by the Karel Werke. This skeleton has no
+    working parts. If you try to send a message to such a machine, it will simply signal an error. 
+    """
+    def move(self):
+        "Move one block forward (standard version)"
+        raise NotImplementedError("move not yet implemented.") 
+    def turnLeft(self):
+        "Turn 90 degrees to the left (standard version)"
+        raise NotImplementedError("turnLeft not yet implemented.")
+    def pickBeeper(self):
+        "Pick one beeper from the current corner if present (standard version)"
+        raise NotImplementedError("pickBeeper not yet implemented.") 
+    def putBeeper(self):
+        "Put one beeper on the current corner if holding any (standard version)"
+        raise NotImplementedError( "putBeeper not yet implemented.")
+    def turnOff(self):
+        "Turn off and accept no further instructions (standard version)"
+        raise NotImplementedError("turnOff not yet implemented.") 
+    
+
+class UrRobot(_RobotSkeleton, Observable):
+    "The most primitive kind of robot. Has no sensing facilities. Knows how to interact with the world." 
+    _graphics_initialized = False  # Class-level attribute for graphics initialization
+    #_use_tk_graphics = True # Class-level flag for using graphics, default mode is to use tk graphics
+
+    @classmethod
+    def use_graphics(cls, mode):  #Really only use this to turn off graphics
+        global RobotWorld, window, world, use_graphics
+        use_graphics = mode
+
+        if use_graphics == False:
+            from karel.robotworld import RobotWorld as RW, window as win, world as wd
+        elif use_graphics == True:
+            from karel.tkworldadapter import RobotWorld as RW, window as win, world as wd
+        else:
+            print("No graphics system defined. Exiting")
+            exit()
+        
+        RobotWorld, window, world = RW, win, wd
+        if(DEBUG): print(f"Graphics mode set to: {use_graphics}")
+        return world
+
+
+    moveAction = 0 #These are nominal values only
+    turnLeftAction = 1
+    pickBeeperAction = 2
+    putBeeperAction = 3
+    turnOffAction = 4
+    createAction = 5
+    setVisibleAction = 6
+    setCostumeAction = 7
+    crashAction = 8
+
+    # a simple dictionary to get the string for the int code
+    actions = {
+        0: "move()",
+        1: "turnLeft()",
+        2: "pickBeeper()",
+        3: "putBeeper()",
+        4: "turnOff()",
+        5: "New Robot Created",
+        6: "Robot Visibility Changed",
+        7: "Robot Costume Changed",
+        8: "CRASHED"
+    }
+    
+    def __init__(self, street, avenue, direction, beepers, fill = 'yellow', outline = 'black', visible=True, costume=None):
+        "Create a robot in a particular situation."
+
+        if not UrRobot._graphics_initialized:
+            if(DEBUG): print("initializing gaphics")
+            UrRobot._initialize_graphics()
+
+        Observable.__init__(self)
+        legalCorner(street, avenue)
+        self.__street = street
+        self.__avenue = avenue
+        self.__direction = direction
+        self.__visible = visible
+
+        if beepers < 0 :
+            beepers = infinity
+        self.__beepers = beepers
+        self.__ID = _incrementRobotCount()
+        self.__fill = fill
+        self.__outline = outline
+        self.__costume = costume
+        self.__running = True;
+        if world is not None:
+            self.addObserver(world)
+#        world._World__registerRobot(self)
+        self.setChanged()
+        initial_state = self.RobotState(self, self.createAction)
+        self.notifyObservers(initial_state)
+        self.__pausing = False
+        self.__userPausing = False
+        self.__action_count = 0
+        self.__state_history = [initial_state]
+
+
+
+    @staticmethod
+    def _initialize_graphics():
+        """Initialize the graphics window and world settings.
+            'Graphics' is a bit of a misnomer.  It means use tkinter graphics
+            via the tkworldadpater(KarelWindow) (UrRobot.use_graphics=True) if in GUI mode, but it means
+            ascii if NOT in graphics mode (UrRobot.use_graphics=False)
+        """
+        global _window
+
+        # Only initialize graphics if window function is available
+        if window is not None and _window is None:
+            _window = window()  # Initialize the graphical window by default
+            if(DEBUG): print("Creating window with graphics = ", use_graphics)
+
+            def default_task():
+                pass
+
+            # Register atexit to run the graphics loop with the default task
+            import atexit
+            atexit.register(lambda: _window.run(default_task))
+
+        UrRobot._graphics_initialized = True
+        
+    def clone(self):
+        robot = copy(self)
+        robot.__ID = _incrementRobotCount()
+        Observable.__init__(robot)
+        robot.addObserver(world)
+        robot.setChanged()
+        initial_state = robot.RobotState(robot, robot.createAction)
+        robot.notifyObservers(initial_state)
+        robot.__state_history = [initial_state]  # fresh history, not shared with the original
+        return robot
+
+    def getID(self):
+        print(self.__ID, str(self.__ID))
+
+
+
+    def display(self):
+        "Print out the current situation of the robot."
+        print ("Robot with ID: " + str(self.__ID))
+        print ("Street " + str(self.__street))
+        print ("Avenue " + str(self.__avenue))
+        print ("Direction " + self.__direction.__name__)
+        beepers = self.__beepers
+        if beepers >= 0 :
+            print ("Beepers " + str(beepers))
+        else :
+            print ("Beepers infinity" )
+        if self.__running :
+            print ("Running")
+        else:
+            print ("Not running")
+            
+    def showState(self, message):
+        print (message)
+        self.display()
+            
+    def ID(self):
+        return self.__ID
+    
+    def isRunning(self):
+        return self.__running
+
+    def getStateHistory(self):
+        """Return this robot's full history as a list of RobotState snapshots, one per
+        action taken (move, turnLeft, pickBeeper, putBeeper, turnOff, setVisible,
+        setCostume), plus its initial state as entry [0]. Each RobotState exposes
+        .street(), .avenue(), .direction(), .beepers(), .action(), .isRunning(),
+        .visible(), .costume(), .id()."""
+        return self.__state_history
+
+    def getInitialState(self):
+        """Convenience for getStateHistory()[0] - this robot's state at creation, before
+        any actions were taken."""
+        return self.__state_history[0]
+
+    def _update_if_graphics(self):
+        "We need this method call update() directly on a _window if it's a tkinter Frame"
+        global _window
+        if use_graphics == True:
+            if _window:
+                _window.update()  # Refresh the graphics window
+            else:
+                print("ERROR: no _window to call update on")
+
+    def _perform_action(self, action):
+        """Perform a robot action, notify observers, and update the window. Leave check if running to action methods"""
+        self.setChanged()
+        state = self.RobotState(self, action)
+        self.__state_history.append(state)
+        self.notifyObservers(state)
+
+        # Always refresh graphics for actions with world-visible side effects (beeper
+        # changes) or that reveal robot state (setVisible, turnOff/crash), even if the
+        # robot itself is currently invisible - only pure movement stays gated on visibility.
+        _alwaysRefresh = (self.setVisibleAction, self.setCostumeAction, self.pickBeeperAction, self.putBeeperAction, self.turnOffAction, self.crashAction)
+        if action in _alwaysRefresh or self.__visible:
+            self._update_if_graphics()
+
+        self.sleep()
+              
+    def move(self):
+        "Move one block in the current direction or fail if the front is not clear."
+        _check_pause()  # Check pause/step before executing
+        self.__pause('move')
+        if not self.__running :
+            raise RobotNotRunning("Cannot move.")
+        self.__speedCheck()
+        try:
+            self.__direction(self, world)
+        except FrontIsBlocked as e:
+            self._crashOut(str(e))
+            raise
+        self.__action_count += 1
+        self._perform_action(self.moveAction)
+  
+
+    def __speedCheck(self):
+        world.speedCheck()
+            
+    def turnOff(self):
+        "Turn the robot off. After turnOff the robot will give errors if sent other messages."
+        _check_pause()  # Check pause/step before executing
+        self.__pause('turnOff')
+        self.__speedCheck()
+        self.__running = False;
+        self.__action_count += 1
+
+        # Print state only if invisible
+        if not self.__visible:
+            beeps = self.__beepers
+            beeps_str = "infinity" if beeps == infinity else str(beeps)
+            print(
+                f"Invisible Robot {self.__ID} turned off at ({self.__street}, {self.__avenue}) "
+                f"facing {self.__direction.__name__} with {beeps_str} beeper(s) in bag."
+            )
+
+
+        self._perform_action(self.turnOffAction)
+
+    def _crashOut(self, reason):
+        """Internal: mark this robot as crashed after an illegal action (hit a wall,
+        tried to pick up a beeper that wasn't there, or tried to put down a beeper it
+        didn't have). Shows the crash image and a 'check the console' message in the
+        toolbar, in addition to whatever exception the caller is about to raise."""
+        self.__running = False
+        self.__action_count += 1
+        print(
+            f"CRASH: Robot {self.__ID} crashed at ({self.__street}, {self.__avenue}) "
+            f"facing {self.__direction.__name__}: {reason}"
+        )
+        self._perform_action(self.crashAction)
+
+        global _window
+        if _window is not None and hasattr(_window, 'showCrashMessage'):
+            _window.showCrashMessage()
+        if _window is not None and hasattr(_window, 'play_pause_btn'):
+            _window.play_pause_btn.config(text="▶ Run", state="disabled")
+            _window.is_paused = True
+            _window._program_finished = True
+
+
+    def turnLeft(self):
+        "Turn ninety degrees to the left."
+        _check_pause()  # Check pause/step before executing
+        self.__pause('turnLeft')
+
+        if not self.__running :
+            raise RobotNotRunning( "Cannot turnLeft.")
+        self.__speedCheck()
+        self.__direction = _nextDirection[self.__direction]
+        self.__action_count += 1
+        self._perform_action(self.turnLeftAction)
+
+    def setVisible(self, tf:bool):
+        self.__pause(f'setVisible({tf})')
+        self.__visible = tf
+        self._perform_action(self.setVisibleAction)
+
+    def setCostume(self, costume):
+        "Change this robot's costume (image) to a different one, e.g. setCostume('sparky')."
+        self.__pause(f'setCostume({costume})')
+        self.__costume = costume
+        self._perform_action(self.setCostumeAction)
+
+    def pickBeeper(self):
+        "Pick a beeper from the current corner or fail if there are none to pick."
+        _check_pause()  # Check pause/step before executing
+        self.__pause('pickBeeper')
+        if not self.__running :
+            raise RobotNotRunning( "Cannot pickBeeper.")
+        self.__speedCheck()
+        try :
+            world.removeBeeper(self.__street, self.__avenue, False)
+            beepers = self.__beepers
+            if beepers >= 0 :
+                self.__beepers = beepers + 1
+            self.__action_count += 1
+            self._perform_action(self.pickBeeperAction)
+
+        except NoBeepers as data :
+            self._crashOut(str(data))
+            raise Exception("Failed to Pick Beeper")
+
+        
+    def putBeeper(self):
+        "Place a beeper on the current corner or fail if none are carried."
+        _check_pause()  # Check pause/step before executing
+        self.__pause('putBeeper')
+        if not self.__running :
+            raise RobotNotRunning( "Cannot putBeeper.")
+
+        self.__speedCheck()
+        beepers = self.__beepers
+        if  beepers > 0 :
+            self.__beepers = beepers - 1
+            world.placeBeepers(self.__street, self.__avenue, 1)
+            self.__action_count += 1
+        elif beepers == infinity :
+            self.__action_count += 1
+            world.placeBeepers(self.__street, self.__avenue, 1)
+        else :
+            self._crashOut("no beepers in beeper bag")
+            raise NoBeepersInBeeperBag()
+
+        self._perform_action(self.putBeeperAction)
+        # self.setChanged()
+        # self.notifyObservers(self.RobotState(self, self.putBeeperAction))
+        # self._update_if_graphics()
+        # self.sleep()
+        
+    def sleep(self):
+        if world.delay() > 0 :
+            time.sleep(world.delay() / 100.0) # FIXME: Tune this delay
+            
+        
+    def run(self):
+        pass
+        
+    def __pause(self, action):
+        if not self.__pausing : return
+        print ('Robot with ID: ' + str(self.__ID) + ' is about to ' + action +'.')
+        sys.stdin.read(1)
+        
+    def userPause(self, action):
+        if not self.__userPausing : return
+        print ('Robot with ID: ' + str(self.__ID) + ' is about to ' + action +'.')
+        sys.stdin.read(1)
+    
+    def setPausing(self, bool):
+        self.__pausing = bool
+        
+    def setUserPausing(self, bool):
+        self.__userPausing = bool
+        
+    def neighbors(self):
+        "Return a list of the other robots on the current corner." 
+        return world._neighborsOf(self)
+    
+    class RobotState:
+        "Snapshots the state of a robot for graphics, tracing, ..."
+        def __init__(self, robot, action):
+            self.__street = robot._UrRobot__street
+            self.__avenue = robot._UrRobot__avenue
+            self.__direction = robot._UrRobot__direction
+            self.__beepers = robot._UrRobot__beepers
+            self.__running = robot._UrRobot__running
+            self.__id = robot._UrRobot__ID
+            self.__action = action
+            self.__visible = robot._UrRobot__visible
+            self.__costume = robot._UrRobot__costume
+
+        def street(self):
+            return self.__street
+        def avenue(self):
+            return self.__avenue
+        def direction(self):
+            return self.__direction
+        def beepers(self):
+            return self.__beepers
+        def isRunning(self):
+            return self.__running
+        def action(self):
+            return self.__action
+    
+        def visible(self):
+           return self.__visible
+
+        def costume(self):
+           return self.__costume
+
+        def id(self):
+            return self.__id
+
+        def __repr__(self):
+            action_str = UrRobot.actions.get(self.__action, str(self.__action))
+            beepers_str = "infinity" if self.__beepers == infinity else str(self.__beepers)
+            return (
+                f"RobotState(id={self.__id}, street={self.__street}, avenue={self.__avenue}, "
+                f"direction={self.__direction.__name__}, beepers={beepers_str}, "
+                f"action={action_str!r}, running={self.__running}, visible={self.__visible}, "
+                f"costume={self.__costume!r})"
+            )
+
+        __str__ = __repr__
+
+from karel.sensorpack import _SensorPack
+    
+class Robot(UrRobot, _SensorPack) :
+    "Adds sensing facilities to robots, but otherwise these behave just like UrRobots."
+
+    def __init__(self, street, avenue, direction, beepers, fill = 'yellow', outline = 'black', costume=None):
+        UrRobot.__init__(self, street, avenue, direction, beepers, fill, outline, costume=costume)
+        
+    def anyBeepersInBeeperBag(self):
+        "Return true if there are beepers carried by this robot."
+        return self._UrRobot__beepers != 0    
+    
+    def nextToABeeper(self):
+        "Return true if there are beepers on the current corner."
+        return world._beepersAt(self._UrRobot__street, self._UrRobot__avenue)
+    
+    def facingNorth(self):
+        "Return true if this robot is facing north."
+        return self._UrRobot__direction == North
+    
+    def facingEast(self):
+        "Return true if this robot is facing east."
+        return self._UrRobot__direction == East
+    
+    def facingSouth(self):
+        "Return true if this robot is facing south."
+        return self._UrRobot__direction == South
+    
+    def facingWest(self):
+        "Return true if this robot is facing west."
+        return self._UrRobot__direction == West
+    
+    def frontIsClear(self):
+        "Return true if there is no wall immediately in front of this robot."
+        return world._clearBefore(self)
+    
+    def nextToARobot(self):
+        "Return true if there are any other robots on the current corner."
+        return self.neighbors() != []
+    
+    def getStreet(self):
+        return self._UrRobot__street
+    
+    def getAvenue(self):
+        return self._UrRobot__avenue
+    
+    def getBeepers(self):
+        return self._UrRobot__beepers
+    
