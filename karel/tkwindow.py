@@ -503,6 +503,11 @@ class KarelWindow(Frame):
         fil = Menu()
         fil.add_command(label = 'Quit   ^Q', command=lambda x='Quit':endProgram(x))
         bar.add_cascade(label='File', menu=fil)
+
+        tools = Menu()
+        tools.add_command(label='World Builder...', command=self.openWorldBuilder)
+        bar.add_cascade(label='Tools', menu=tools)
+
         root.config(menu=bar)
         self.bind_all('<Command-q>', exit) # Mac standard
         self.bind_all('<Control-q>', exit) # Windows
@@ -660,7 +665,12 @@ class KarelWindow(Frame):
 #        self.makeStreetsAndAvenues()
 #        self.makeBoundaryWalls()
 #        self.labelStreetsAvenues()
-        
+
+    def openWorldBuilder(self):
+        "Opens the World Builder tool as a child window, for creating/editing .kwld files."
+        from karel.worldbuilder import WorldBuilder
+        WorldBuilder(master=self.__root)
+
     def toggle_play_pause(self):
         if self.is_paused:
             # Resume execution (Run -> Pause)
